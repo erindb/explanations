@@ -15,7 +15,7 @@
 \newcommand{\todo}[1]{{\color{red}#1}}
 \newcommand{\ndg}[1]{{\color{green}#1}}
 
-\title{Explanations in context}
+\title{Modeling the pragmatics of explanation}
  
 \author{{\large \bf Erin Bennett} (erindb@stanford.edu), {\large \bf Noah D.~Goodman} (ngoodman@stanford.edu)\\
   Department of Psychology, Stanford University.}
@@ -26,9 +26,11 @@
 
 \begin{abstract}
 
-Proposal: 250-500 words
+Everyday explanations are speech acts. As such, explanations offered and their interpretations likely vary with contextual factors. Drawing from work on language understanding these factors might include: possible alternative explanations, the knowledge states of explainer and explainee, the goals of each, and the topic of conversation. We explore a formal model of explanation choice and interpretation derived from recent progress on Bayesian modeling of counterfactuals \cite{LucasKemp2015} and of pragmatic language use \cite{FrankGoodman2012, GoodmanStuhlmuller2013}. Our model realizes a semantics grounded in counterfactuals over causal models \cite{Lewis1973}, but modulated by communicative pressures and social reasoning \cite{Grice1970, Lewis1969}. Our model is able to predict a variety of intuitions about explanation in simple contexts. For example, suppose that Alice and Bob are playing a game of tug-of-war where the stronger player usually wins. If we learn that Alice won, we would infer that she is probably strong. However if someone chose to tell us, "Alice won because Bob was weak," we have the intuition that Alice is likely weak. (On the other hand, simply knowing that Alice won and that Bob is weak gives very little new information about Alice's strength.)
 
-Different factors seem to affect the selection of the best explanation from a set of possible causes. Some of these factors seem to be the result of pragmatic inference. We implement an existing probabilistic model of counterfactual reasoning to identify possible causes (and gradable judgements of how causally relevant each might be) \cite{LucasKemp2015}, along with a model of rational communication \cite{FrankGoodman2012, GoodmanStuhlmuller2013} to investigate how changes to the background causal model, changes to what information is common knowledge, and changes to the question under discussion (QUD) can affect people's judgments of how good a potential cause is at explaining an effect. In particular, we test such a model in situations where interlocuters have different knowledge states to see whether it tracks people's judgments of the goodness of explanations, and also look at whether the effect of moral judments and/or exportability on causal selection can be explained by QUD effects.
+We first explore how different causal models yield different types of explanation: causal explanations are the natural case from simple causal models, while teleological explanations follow from a causal model that includes a (notional) decision-making agent. We then turn to the predicted effects of pragmatics factors on explanation. We investigate how changes to the common background knowledge, to the epistemic states of each participant, and to the question under discussion affect judgments of how good an explanation is in context. For example, suppose Bob either generally follows in his older sister Alice’s footsteps or deliberately does the opposite. If an explainer were asked, "Why is Bob playing soccer?" she might reply with one of two explanations: "Because Alice is playing soccer," or "Because Bob usually does whatever Alice does." If the explainer knows that the questioner doesn't know one of these facts, then the explanation with new information becomes more likely. If the explainer knows that the questioner has some goal in mind (e.g. if the questioner is interested in buying Bob sporting equipment, or more generally in predicting Bob’s preferences or future actions) then this goal will also guide her choice of explanation.
+
+In a series of behavioral experiments, we test whether the interpretations of our pragmatic explainer model and its preferred explanations under different communicative contexts match people's interpretations of and preferences for different explanations. We manipulate domain structure, knowledge state of the questioner, and topic/goals of the conversation. We use common-sense scenarios similar to the examples above, which, although simple, allow for rich and complex inferences based on different explanations. We conclude with a discussion of how our model and results relate to theories of explanation, emphasizing problems for our model and future prospects.
 
 \textbf{Keywords:} 
 explanations; counterfactuals; pragmatics
@@ -58,11 +60,8 @@ Causal backgrounding, where a cause becomes a less good explanation as a result 
 \citeA{Woodward2011}, responding to some arguments that people's notion of ``cause'' is purely subjective and contextual, argues that some factors that may seem pragmatic and context-dependent are actually systematic and invariably matter to determining whether something is considered a ``cause'' or just an ``enabling condition''.
 %always matter to determining whether something is considered a ``cause'' or just an ``enabling condition''.
 The factors that Woodward cites as probably systematic and independent of context are ``stability'' and ``specificity''.
-By ``stability'', he means the sufficiency of the cause to bring about the effect in other counterfactual scenarios.\footnote{
-Other authors have used ``sensitivity'' to refer to how much variations in other features of a counterfactual world would negate the potential cause's ability to bring about the effect.
-}
+By ``stability'', he means the sufficiency of the cause to bring about the effect in other counterfactual scenarios.
 By ``specificity'', he means the extent to which minor changes in the manner in which the cause occurred would have brought about corresponding changes in the way the effect occurred.
-\todo{better reference for this, e.g. with experiments...?}
 
 \subsection{Counterfactuals}
 
