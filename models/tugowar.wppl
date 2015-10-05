@@ -171,77 +171,36 @@ var literalERP = cache(function(utterance) {
   return checkPossible(unfactoredERP);
 });
 
-var getAlternativeUtterances = function(basePropositions) {
-  var nothing = ["nothing"];
-  var negPropositions = map(function(p) {return "!" + p;}, basePropositions);
-  var simplePropositions = negPropositions.concat(basePropositions);
-  var propositionPairs = [].concat.apply(
-    [],
-    map(
-      function(a) {
-        return map(
-          function(b) {
-            return [a,b];
-          },
-          simplePropositions
-        );
-      },
-      simplePropositions
-    )
-  );
-  // because pairs for everything in both directions
-  var becausePropositions = map(
-    function(lst) {return lst[0] + " because " + lst[1];},
-    filter(
-      function(lst) {
-        return lst[0] != lst[1];
-      },
-      propositionPairs
-    )
-  );
-  var conjunctionPropositions = map(
-    function(lst) {return lst[0] + " & " + lst[1];},
-    filter(
-      function(lst) {
-        var notSame = lst[0] != lst[1];
-        var ordered = lst[0] > lst[1];
-        return notSame & ordered;
-      },
-      propositionPairs
-    )
-  );
-  return nothing.concat(
-    simplePropositions
-  ).concat(
-    becausePropositions
-  ).concat(
-    conjunctionPropositions
-  );
-};
-
-var utterances = getAlternativeUtterances(
-  ['aliceStrong', 'aliceLazy', 'bobStrong', 'bobLazy', 'aliceWin']
-);
-
 var alpha = 5;
 
-var costs = map(function(utterance) {
-  if (utterance == "nothing") {
-    return 0;
-  } else {
-    var words = utterance.split(" ");
-    var chars = utterance.split("");
-    var negs = filter(function(x) {return x == "!";}, chars);
-    return words.length;
-  }
-}, utterances);
-
-var utterancePrior = function() {
-  var probabilities = map(function(x) {return Math.exp(-x);}, costs);
-  return utterances[discrete(probabilities)];
+var getUtterancePrior = function(utterance) {
+  var basePropositions = ['aliceStrong', 'aliceLazy', 'bobStrong', 'bobLazy', 'aliceWin'];
+  var getAlternativeUtterances = function(utterance) {
+    var negPropositions = map(function(p) {return "!" + p;}, basePropositions);
+    var simplePropositions = negPropositions.concat(basePropositions);
+    return [utterance, "nothing"].concat(
+      simplePropositions
+    );
+  };
+  var utterances = getAlternativeUtterances(utterance);
+  var costs = map(function(utterance) {
+    if (utterance == "nothing") {
+      return 0;
+    } else {
+      var words = utterance.split(" ");
+      var chars = utterance.split("");
+      var negs = filter(function(x) {return x == "!";}, chars);
+      return words.length;
+    }
+  }, utterances);
+  return function() {
+    var probabilities = map(function(x) {return Math.exp(-x);}, costs);
+    return utterances[discrete(probabilities)];
+  };
 };
 
-var speakerERP = cache(function(world) {
+var speakerERP = cache(function(world, baseUtterance) {
+  var utterancePrior = getUtterancePrior(baseUtterance);
   var unfactoredERP = Enumerate(function() {
     var utterance = utterancePrior();
     //print(utterance);
@@ -259,7 +218,7 @@ var listenerERP = function(utterance) {
     var actualRVs = rand();
     var actualWorld = vars(actualRVs);
     //print(actualWorld);
-    var description = speakerERP(actualWorld);
+    var description = speakerERP(actualWorld, utterance /*give speaker utterance to generate relevant alternatives*/);
     factor(
       description == 'impossible' ? -Infinity : description.score([], utterance) * alpha
     );
@@ -267,45 +226,30 @@ var listenerERP = function(utterance) {
   });
 };
 
-// ======== example =========
+// ======== examples =========
 
-//print(Enumerate(utterancePrior));
-/*speakerERP({
-  aliceStrong: true, aliceLazy: true,
-  bobStrong: true, bobLazy: true,
-  aliceWin: true
-});*/
-
-//literalERP('bacon & neighbors').print();
-//literalERP('neighbors because bacon');
-
-//listenerERP('aliceWin & bobLazy').print();
-//listenerERP('aliceWin because bobLazy');
+print('aliceWin & bobLazy');
+printERP(listenerERP('aliceWin & bobLazy'));
 
 print('aliceWin because bobLazy');
-printERP(literalERP('aliceWin because bobLazy'));
 printERP(listenerERP('aliceWin because bobLazy'));
-// // bob probably did his best
 
-// print("");
+print('aliceWin & aliceStrong');
+printERP(listenerERP('aliceWin & aliceStrong'));
 
 print('aliceWin because aliceStrong');
-printERP(literalERP('aliceWin because aliceStrong'));
 printERP(listenerERP('aliceWin because aliceStrong'));
-// // bob probably did his best
 
-// print("");
+print('aliceWin & !aliceLazy');
+printERP(listenerERP('aliceWin & !aliceLazy'));
 
 print('aliceWin because !aliceLazy');
-printERP(literalERP('aliceWin because !aliceLazy'));
 printERP(listenerERP('aliceWin because !aliceLazy'));
-// // alice and bob probably have similar strengths
 
-// print("");
+print('aliceWin & !bobStrong');
+printERP(listenerERP('aliceWin & !bobStrong'));
 
 print('aliceWin because !bobStrong');
-printERP(literalERP('aliceWin because !bobStrong'));
 printERP(listenerERP('aliceWin because !bobStrong'));
-// // alice is probably also weak
 
 "finished"
