@@ -7,8 +7,9 @@ var print = function(str) {
 var printERP = function(erp) {
   var support = erp.support();
   var probs = map(function(x) {return Math.exp(erp.score([], x));}, support);
-  print(support);
-  print(probs);
+  print("var s = " + support + ";");
+  print("var p = " + probs + ";");
+  print("vizPrint(Enumerate(function() {return s[discrete(p)];}))")
 };
 
 // ======== other utilities =========
@@ -21,6 +22,8 @@ var contextualEval = cache(function(proposition, world) {
     "",
     _.pairs(world)
   );
+  print(context);
+  print(context + proposition + ';');
   return webpplEval(context + proposition + ';');
 });
 
@@ -183,7 +186,7 @@ var meaning_factor = cache(function(utterance, world, rVs) {
     var doubleNegation = negation ? words[1] == "itisnotthecasethat" : false;
     var restOfWords = doubleNegation ? words.slice(2) : negation ? words.slice(1) : words;
     if (restOfWords.length < 2 | restOfWords[1] != 'because') {
-      var isTrue = contextualEval(utterance, world);
+      var isTrue = contextualEval(restOfWords.join(' '), world);
       // if negation, check that negated utterance is true
       return (doubleNegation ? isTrue : negation ? !isTrue : isTrue) ? 0 : -Infinity;
     } else {
@@ -263,7 +266,7 @@ var speakerERP = cache(function(world, baseUtterance) {
   var utterancePrior = getUtterancePrior(baseUtterance);
   var unfactoredERP = Enumerate(function() {
     var utterance = utterancePrior();
-    //print(utterance);
+    print(utterance);
     var interpretation = literalERP(utterance);
     return {
       factor: interpretation == 'impossible' ? -Infinity : interpretation.score([], world),
@@ -303,7 +306,69 @@ var speaker2ERP = function(utterance, world) {
 
 // ======== examples =========
 
-print('literalERP');
-printERP(literalERP('drink=="coffee"'));
+printERP(speakerERP(
+  { paperDueTomorrow: false,
+      paperAlreadyFinished: false,
+      bobsGoal: 'true',
+      drink: 'coffee',
+      drinkIsCaffeinated: true,
+      stayUp: false,
+      finishPaper: false
+  }, 'drink=="coffee"'
+));
+
+// print('basic world: stay up because want finish paper (teleo)')
+// printERP(speaker2ERP(
+//   'stayUp because bobsGoal=="finishPaper"',
+//   {
+//     paperDueTomorrow: true,
+//     paperAlreadyFinished: false,
+//     bobsGoal: 'finishPaper',
+//     drink: 'coffee',
+//     drinkIsCaffeinated: true,
+//     stayUp: true,
+//     finishPaper: true
+//   }
+// ));
+// print('basic world: stay up because paper not finished (causal)')
+// printERP(speaker2ERP(
+//   'stayUp because !paperAlreadyFinished',
+//   {
+//     paperDueTomorrow: true,
+//     paperAlreadyFinished: false,
+//     bobsGoal: 'finishPaper',
+//     drink: 'coffee',
+//     drinkIsCaffeinated: true,
+//     stayUp: true,
+//     finishPaper: true
+//   }
+// ));
+// print('basic world: stay up because paper not finished (causal)')
+// printERP(speaker2ERP(
+//   'stayUp because !paperAlreadyFinished',
+//   {
+//     paperDueTomorrow: true,
+//     paperAlreadyFinished: false,
+//     bobsGoal: 'finishPaper',
+//     drink: 'coffee',
+//     drinkIsCaffeinated: true,
+//     stayUp: true,
+//     finishPaper: true
+//   }
+// ));
+
 
 "finished"
+
+// Why did Bob stay up all night?
+// - to finish the paper (teleo)
+// - he drank coffee (causal)
+// - his paper is due tomorrow (causal)
+// - coffee makes you stay up late (causal + lawlike)
+// - staying up all night can get papers finished (causal + lawlike)
+
+// Why did Bob drink coffee?
+// - because it's caffeinated
+// - because it kept him up
+// - because his paper is due tomorrow.
+// - because it helped him finish the paper
