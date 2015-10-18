@@ -1,0 +1,109 @@
+// ======== compatibility with browser =========
+
+var print = function(str) {
+  console.log(str);
+};
+
+var printERP = function(erp) {
+  var support = erp.support();
+  var probs = map(function(x) {return Math.exp(erp.score([], x));}, support);
+  print(support);
+  print(probs);
+};
+
+// ======== parameters and counterfactual functions =========
+
+// parameter for how similar counterfactual world is to actual world
+var stickiness = 0.5;
+
+var stickyRand = function(actualRVs) {
+  var freshRVs = rand();
+  return mapObject(function(key, val) {
+    return flip(stickiness) ? actualRVs[key] : freshRVs[key];
+  }, actualRVs);
+};
+
+var contextualEval = cache(function(proposition, world) {
+  var context = reduce(
+    function(keyVal, acc) {
+      return acc + ' var ' + keyVal[0] + ' = ' + JSON.stringify(keyVal[1]) + ';';
+    },
+    "",
+    _.pairs(world)
+  );
+  return webpplEval(context + proposition + ';');
+});
+
+// ======== model specification =========
+
+//// exogenous random variables
+var rand = function() {
+  return {
+    PaperDueTomorrow: flip(0.5),
+    PaperAlreadyFinished: flip(0.5),
+    BobReasonable: flip(0.9),
+    Action: randomInteger(11)/10,
+    CoffeeWorks: flip(0.9),
+    AllNighterWorks: flip(0.9)
+  };
+};
+
+//// background: before agent's actions
+var backgroundModel = cache(function(RVs) {
+  var paperDueTomorrow = RVs.PaperDueTomorrow;
+  var paperAlreadyFinished = RVs.PaperAlreadyFinished;
+  // agent's goal: probably wants to finish paper. maybe doesn't care.
+  var bobsGoal = RVs.BobReasonable & paperDueTomorrow & !paperAlreadyFinished ? 'finishPaper' : 'true';
+  return {
+    paperDueTomorrow: paperDueTomorrow,
+    paperAlreadyFinished: paperAlreadyFinished,
+    bobsGoal: bobsGoal
+  };
+});
+
+//// causal model that agent accurately understands about what follows the agent's actions
+var causalModel = cache(function(act, background, RVs) {
+  var drink = act ? 'coffee' : 'herbal tea';
+  var isCaffeinated = function(drink) { return drink == 'coffee'; };
+  var stayUp = isCaffeinated(drink) ? RVs.CoffeeWorks : false;
+  var finishPaper = background.paperAlreadyFinished ? true : stayUp ? RVs.AllNighterWorks : false;
+  return {
+    drink: drink,
+    drinkIsCaffeinated: isCaffeinated(drink),
+    stayUp: stayUp,
+    finishPaper: finishPaper
+  };
+});
+
+var vars = cache(function(RVs) {
+  var RVs = rand();
+
+  var background = backgroundModel(RVs);
+
+  var agentERP = Enumerate(function() {
+    var actionPrior = function() { return flip(0.1); };
+    var act = actionPrior();
+    var imaginedRVs = rand();
+    var outcome = causalModel(act, background, imaginedRVs);
+    condition(contextualEval(background.bobsGoal, outcome));
+    return act;
+  });
+
+  var probAct = Math.exp(agentERP.score([], true));
+  var act = probAct > RVs.uAction;
+
+  var outcome = causalModel(act, background);
+
+  return {
+    paperDueTomorrow: background.paperDueTomorrow,
+    paperAlreadyFinished: background.paperAlreadyFinished,
+    bobsGoal: background.bobsGoal,
+    drink: outcome.drink,
+    drinkIsCaffeinated: outcome.drinkIsCaffeinated,
+    stayUp: outcome.stayUp,
+    finishPaper: outcome.finishPaper
+  };
+});
+
+var RVs = rand();
+vars(RVs);
