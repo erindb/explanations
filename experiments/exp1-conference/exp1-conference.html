@@ -39,7 +39,7 @@
     (function(){
         var ut_id = "explanations-exp1-alice-bob-conference-tshirts";
         if (UTWorkerLimitReached(ut_id)) {
-          $(body).html("");
+          $('body').html("");
           alert("You have already completed the maximum number of HITs allowed by this requester. Please click 'Return HIT' to avoid any impact on your approval rating.");
         }
     })();
