@@ -91,12 +91,21 @@ turk = turk || {};
 
   // TODO: what do you do if data is an array, rather than an object?
   // Submit a POST request to Turk
-  turk.submit = function(object) {
+  turk.submit = function(data, unwrap) {
+    var keys = getKeys(data);
+
+    if (typeof data == "undefined" || keys.length == 0) {
+      alert("mmturkey: you need to pass a non-empty object to turk.submit()");
+      return;
+    }
+
+    unwrap = !!unwrap;
+
     var assignmentId = turk.assignmentId,
         turkSubmitTo = turk.turkSubmitTo,
         rawData = {},
         form = document.createElement('form');
-   
+
     document.body.appendChild(form);
 
     if (assignmentId) {
@@ -104,25 +113,46 @@ turk = turk || {};
       addFormData(form,"assignmentId",assignmentId);
     }
 
-    // Filter out non-own properties and things that are functions
-    for(var key in object) {
-      if ((hopUndefined || object.hasOwnProperty(key)) && (typeof object[key] != "function") ) {
-        rawData[key] = object[key];
-        addFormData(form, key, JSON.stringify(object[key]));
-      }
+    if (unwrap) {
+      // Filter out non-own properties and things that are functions
+      keys.map(function(key) {
+        rawData[key] = data[key];
+        addFormData(form, key, JSON.stringify(data[key]));
+      });
+
+    } else {
+      rawData["data"] = data;
+      addFormData(form, "data", JSON.stringify(data));
     }
 
     // If there's no turk info
     if (!assignmentId || !turkSubmitTo) {
+      var popup = window.open();
+
       // Emit the debug output and stop
-      var div = document.createElement('div');
-      div.style.fontFamily = '"HelveticaNeue-Light", "Helvetica Neue Light", "Helvetica Neue", sans-serif';
-      div.style.fontSize = "14px";
-      div.style.cssFloat = "right";
-      div.style.padding = "1em";
-      div.style.backgroundColor = "#dfdfdf";
-      div.innerHTML = "<p><b>Debug mode</b></p>Here is the data that would have been submitted to Turk: <ul>" + htmlify(rawData) + "</ul>"
-      document.body.appendChild(div);
+      var div = document.createElement('div'),
+          style = div.style;
+
+      div.innerHTML = lines(
+        tag("h2","<code>turk.submit</code> testing mode"),
+        tag("p", "Here is the data that would have been submitted to Turk:"),
+        tag("div style='width: 700px'", htmlify(rawData))
+      );
+
+      popup.document.body.appendChild(div);
+      popup.document.head.innerHTML = lines(
+        tag("title", "mmturkey data"),
+        tag("style",
+            lines(
+              "body { font-family: 'Helvetica'; font-size: 12px}",
+              "table { border: 1px solid gray; border-collapse: collapse; box-shadow: 2px 2px 1px #aaa; }",
+              ".tabular { margin: 0 0.5em 0.5em 0 } ",
+              ".tabular td { background-color: #e0e0e0; font-size: 10px; }",
+              "th, td { font-family: 'Courier New'; padding: 0.55em; font-size: 12px}",
+              "th { background-color: #6699cc }",
+              "td.key { font-weight: bold; background-color: tan }"
+            )));
+
       return;
     }
 
