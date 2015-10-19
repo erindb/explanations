@@ -12,6 +12,14 @@ var printERP = function(erp) {
   print("print(Enumerate(function() {return s[discrete(p)];}))")
 };
 
+var vizPrintERP = function(erp) {
+  var support = erp.support();
+  var probs = map(function(x) {return Math.exp(erp.score([], x));}, support);
+  print("var s = " + JSON.stringify(support) + ";");
+  print("var p = " + JSON.stringify(probs) + ";");
+  print("vizPrint(Enumerate(function() {return s[discrete(p)];}))")
+};
+
 // ======== other utilities =========
 
 var contextualEval = cache(function(proposition, world) {
@@ -28,12 +36,14 @@ var contextualEval = cache(function(proposition, world) {
 // ======== model specification =========
 
 var getParam = function() {
-  return randomInteger(11)/10;
+  return (randomInteger(8)+1)/10;
 };
 
 var getParams = function() {
   return [getParam(), getParam()];
 };
+
+var modelPrior = function() { return uniformDraw(['independent', 'cause', 'reverseCause', 'commonCause']); };
 
 var models = {
   independent: {
@@ -163,24 +173,24 @@ var because = function(conditionA, resultB, actualWorld, actualRVs, model, param
   var actuallyA = contextualEval(conditionA, actualWorld);
   var actuallyB = contextualEval(resultB, actualWorld);
 
-  //// without "presuppositions"
-  var ifNotA = "!" + conditionA;
-  var thenNotB = "!" + resultB;
-  var cfERP = counterfactualERP(ifNotA, thenNotB, actualRVs, model, params);
-  return cfERP == 'impossible' ? -Infinity : cfERP.score([], true);
+  // //// without "presuppositions"
+  // var ifNotA = "!" + conditionA;
+  // var thenNotB = "!" + resultB;
+  // var cfERP = counterfactualERP(ifNotA, thenNotB, actualRVs, model, params);
+  // return cfERP == 'impossible' ? -Infinity : cfERP.score([], true);
 
-  // //// with "presuppositions"
-  // if (actuallyA & actuallyB) {;
+  //// with "presuppositions"
+  if (actuallyA & actuallyB) {;
 
-  //   var ifNotA = "!" + conditionA;
-  //   var thenNotB = "!" + resultB;
+    var ifNotA = "!" + conditionA;
+    var thenNotB = "!" + resultB;
 
-  //   var cfERP = counterfactualERP(ifNotA, thenNotB, actualRVs, model, params);
+    var cfERP = counterfactualERP(ifNotA, thenNotB, actualRVs, model, params);
 
-  //   return cfERP == 'impossible' ? -Infinity : cfERP.score([], true);;
-  // } else {
-  //   return -Infinity;
-  // }
+    return cfERP == 'impossible' ? -Infinity : cfERP.score([], true);;
+  } else {
+    return -Infinity;
+  }
 };
 
 /*
@@ -216,10 +226,11 @@ var meaning_factor = cache(function(utterance, world, rVs, model, params) {
   }
 });
 
-var literalERP = cache(function(utterance, model, params) {
+var literalERP = cache(function(utterance) {
   var unfactoredERP = Enumerate(function() {
-    var rand = models[model].rand;
+    var model = modelPrior();
     var params = getParams();
+    var rand = models[model].rand;
     var generalRand = models[model].rand;
     var rand = generalRand(params);
     var vars = models[model].vars;
@@ -227,7 +238,13 @@ var literalERP = cache(function(utterance, model, params) {
     var actualWorld = vars(actualRVs);
     //print(actualWorld);
     return {
-      result: actualWorld,
+      result: {
+        A: actualWorld.A,
+        B: actualWorld.B,
+        model: model,
+        p0: params[0],
+        p1: params[1]
+      },
       factor: meaning_factor(utterance, actualWorld, actualRVs, model, params)
     };
   });
@@ -265,15 +282,25 @@ var basePropositions = ['A', 'B'];
 //   );
 // }();
 
+var utterances = [
+  'nothing',
+  // 'A', 'B', '!A', '!B',
+  // 'A & B', 'A & !B', '!A & B', '!A & !B',
+  'B because A', 'B because !A', 'B because B'
+  // 'A because B', 'A because !B',
+  // '!B because A', '!B because !A',
+  // '!A because B', '!A because !B'
+];
+
 var getUtterancePrior = function(utterance) {
-  var getAlternativeUtterances = function(utterance) {
-    var negPropositions = map(function(p) {return "!" + p;}, basePropositions);
-    var simplePropositions = negPropositions.concat(basePropositions);
-    return [utterance, "nothing", "itisnotthecasethat " + utterance].concat(
-      simplePropositions
-    );
-  };
-  var utterances = getAlternativeUtterances(utterance);
+  // var getAlternativeUtterances = function(utterance) {
+  //   var negPropositions = map(function(p) {return "!" + p;}, basePropositions);
+  //   var simplePropositions = negPropositions.concat(basePropositions);
+  //   return [utterance, "nothing", "itisnotthecasethat " + utterance].concat(
+  //     simplePropositions
+  //   );
+  // };
+  // var utterances = getAlternativeUtterances(utterance);
   var costs = map(getCostUtterance, utterances);
   return function() {
     var probabilities = map(function(x) {return Math.exp(-x);}, costs);
@@ -283,30 +310,47 @@ var getUtterancePrior = function(utterance) {
 
 var speakerERP = cache(function(world, baseUtterance, model, params) {
   var utterancePrior = getUtterancePrior(baseUtterance);
+  var desiredInterpretation = {
+    A: world.A,
+    B: world.B,
+    model: model,
+    p0: params[0],
+    p1: params[1]
+  };
   var unfactoredERP = Enumerate(function() {
     var utterance = utterancePrior();
     //print(utterance);
-    var interpretation = literalERP(utterance, model, params);
+    var interpretation = literalERP(utterance);
     return {
-      factor: interpretation == 'impossible' ? -Infinity : interpretation.score([], world),
+      factor: interpretation == 'impossible' ? -Infinity : interpretation.score([], desiredInterpretation),
       result: utterance
     };
   });
   return checkPossible(unfactoredERP);
 });
 
-// var listenerERP = cache(function(utterance) {
-//   return Enumerate(function() {
-//     var actualRVs = rand();
-//     var actualWorld = vars(actualRVs);
-//     //print(actualWorld);
-//     var description = speakerERP(actualWorld, utterance /*give speaker utterance to generate relevant alternatives*/);
-//     factor(
-//       description == 'impossible' ? -Infinity : description.score([], utterance) * alpha
-//     );
-//     return actualWorld;
-//   });
-// });
+var listenerERP = cache(function(utterance) {
+  return Enumerate(function() {
+    var model = modelPrior();
+    var params = getParams();
+    var rand = models[model].rand;
+    var generalRand = models[model].rand;
+    var rand = generalRand(params);
+    var vars = models[model].vars;
+    var actualRVs = rand();
+    var actualWorld = vars(actualRVs);
+    //print(actualWorld);
+    var description = speakerERP(actualWorld, utterance, model, params /*give speaker utterance to generate relevant alternatives*/);
+    factor(
+      description == 'impossible' ? -Infinity : description.score([], utterance) * alpha
+    );
+    return {
+      model: model,
+      p0: params[0],
+      p1: params[1]
+    };
+  });
+});
 
 // var speaker2ERP = function(utterance, world) {
 //   var s2Utterances = [utterance, "itisnotthecasethat " + utterance];
@@ -325,16 +369,52 @@ var speakerERP = cache(function(world, baseUtterance, model, params) {
 
 // ======== examples =========
 
-print('print("B because A when model is independent")');
-printERP(speakerERP({A: true, B: true}, 'B because A', 'independent', [0.5, 0.5]));
+print('print("nothing")');
+var resultERP = listenerERP('nothing');
+print(resultERP.MAP());
 
-print('print("B because A when model is cause")');
-printERP(speakerERP({A: true, B: true}, 'B because A', 'cause', [0.5, 0.9]));
+printERP(Enumerate(function() {
+  return sample(resultERP).model;
+}))
 
-print('print("B because A when model is reverseCause")');
-printERP(speakerERP({A: true, B: true}, 'B because A', 'reverseCause', [0.5, 0.9]));
+print('print("cause")');
+vizPrintERP(Enumerate(function() {
+  var res = sample(resultERP);
+  condition(res.model == 'cause');
+  return {
+    pA: 'pA=' + JSON.stringify(res.p0),
+    pL: 'pL=' + JSON.stringify(res.p1)
+  };
+}));
 
-print('print("B because A when model is commonCause")');
-printERP(speakerERP({A: true, B: true}, 'B because A', 'commonCause', [0.5, 0.9]));
+print('print("reverseCause")');
+vizPrintERP(Enumerate(function() {
+  var res = sample(resultERP);
+  condition(res.model == 'reverseCause');
+  return {
+    pB: 'pB=' + JSON.stringify(res.p0),
+    pL: 'pL=' + JSON.stringify(res.p1)
+  };
+}));
+
+print('print("commonCause")');
+vizPrintERP(Enumerate(function() {
+  var res = sample(resultERP);
+  condition(res.model == 'commonCause');
+  return {
+    pC: 'pC=' + JSON.stringify(res.p0),
+    pL: 'pL=' + JSON.stringify(res.p1)
+  };
+}));
+
+print('print("independent")');
+vizPrintERP(Enumerate(function() {
+  var res = sample(resultERP);
+  condition(res.model == 'independent');
+  return {
+    pA: 'pA=' + JSON.stringify(res.p0),
+    pB: 'pB=' + JSON.stringify(res.p1)
+  };
+}));
 
 "finished"
