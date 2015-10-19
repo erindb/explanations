@@ -193,6 +193,17 @@ function make_slides(f) {
 
 /// init ///
 function init() {
+
+  repeatWorker = false;
+  (function(){
+      var ut_id = "explanations-exp2-alan-bill-tugowar";
+      if (UTWorkerLimitReached(ut_id)) {
+        $('.slide').empty();
+        repeatWorker = true;
+        alert("You have already completed the maximum number of HITs allowed by this requester. Please click 'Return HIT' to avoid any impact on your approval rating.");
+      }
+  })();
+
   exp.trials = [];
   exp.catch_trials = [];
   exp.condition = _.sample(["trial", "trial", "trial", "trial", "trial", "trial", "prior"]);
@@ -235,6 +246,11 @@ function init() {
       exp.go();
     }
   });
+
+  if (repeatWorker) {
+    $('.slide').empty();
+    alert("You have already completed the maximum number of HITs allowed by this requester. Please click 'Return HIT' to avoid any impact on your approval rating.");
+  }
 
   exp.go(); //show first slide
 }
