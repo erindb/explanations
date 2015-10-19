@@ -14,6 +14,14 @@ function turkGetParam( name, defaultValue ) {
 var turkParams = {};
 
 (function() {
+  var param = function(url, name ) {
+    name = name.replace(/[\[]/,"\\\[").replace(/[\]]/,"\\\]");
+    var regexS = "[\\?&]"+name+"=([^&#]*)";
+    var regex = new RegExp( regexS );
+    var results = regex.exec( url );
+    return ( results == null ) ? "" : results[1];
+  }
+    
     var url = window.location.href,
       src = param(url, "assignmentId") ? url : document.referrer,
       keys = ["assignmentId","hitId","workerId","turkSubmitTo"];
