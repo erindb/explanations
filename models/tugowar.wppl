@@ -7,45 +7,65 @@ var print = function(str) {
 var printERP = function(erp) {
   var support = erp.support();
   var probs = map(function(x) {return Math.exp(erp.score([], x));}, support);
-  print(support);
-  print(probs);
+  print("var s = " + JSON.stringify(support) + ";");
+  print("var p = " + JSON.stringify(probs) + ";");
+  print("print(Enumerate(function() {return s[discrete(p)];}))")
 };
+
+var vizPrint = function(erp) {
+  var support = erp.support();
+  var probs = map(function(x) {return Math.exp(erp.score([], x));}, support);
+  print("var s = " + JSON.stringify(support) + ";");
+  print("var p = " + JSON.stringify(probs) + ";");
+  print("vizPrint(Enumerate(function() {return s[discrete(p)];}))")
+};
+
+// ======== other utilities =========
+
+var contextualEval = cache(function(proposition, world) {
+  var context = reduce(
+    function(keyVal, acc) {
+      return acc + ' var ' + keyVal[0] + ' = ' + JSON.stringify(keyVal[1]) + ';';
+    },
+    "",
+    _.pairs(world)
+  );
+  return webpplEval(context + proposition + ';');
+});
 
 // ======== model specification =========
 
-// exogenous random variables
+var strengthPrior = function() { return [1,2][discrete([1,1])]; };
+var lazinessPrior = function() { return [1,2][discrete([2,1])]; };
+
 var rand = function() {
   return {
-    uAS: flip(0.5),
-    uAL: flip(0.3),
-    uBS: flip(0.5),
-    uBL: flip(0.3),
+    uAS: strengthPrior(),
+    uAL: lazinessPrior(),
+    uBS: strengthPrior(),
+    uBL: lazinessPrior(),
     uAW: flip(0.5)
   };
 };
 
-// endogenous variables are functions of the random state
-var vars = function(rVs) {
-  // strong is strength = 2; weak is strength = 1
-  var aliceStrong = rVs.uAS;
-  var aliceStrength = aliceStrong ? 2 : 1;
-  var aliceLazy = rVs.uAL;
-  var bobStrong = rVs.uBS;
-  var bobStrength = bobStrong ? 2 : 1;
-  var bobLazy = rVs.uBL;
-  // laziness decreases strength by half
-  var alicePulling = aliceLazy ? aliceStrength/2 : aliceStrength;
-  var bobPulling = bobLazy ? bobStrength/2 : bobStrength;
-  var aliceWin = (alicePulling>bobPulling)?true:(bobPulling>alicePulling)?false:rVs.uAW;
-  
+var vars = cache(function(rVs) {
+  var aliceStrength = rVs.uAS;
+  var aliceLaziness = rVs.uAL;
+  var alicePulling = aliceStrength / aliceLaziness;
+  var bobStrength = rVs.uBS;
+  var bobLaziness = rVs.uBL;
+  var bobPulling = bobStrength / bobLaziness;
+  var aliceLucky = rVs.uAW;
+  var winner = (alicePulling>bobPulling) ? 'Alice' : (bobPulling>alicePulling) ? 'Bob' : aliceLucky?'Alice':'Bob';
   return {
-    aliceStrong: aliceStrong,
-    aliceLazy: aliceLazy,
-    bobStrong: bobStrong,
-    bobLazy: bobLazy,
-    aliceWin: aliceWin
-  };
-};
+    aliceStrong: aliceStrength==2,
+    aliceLazy: aliceLaziness==2,
+    bobStrong: bobStrength==2,
+    bobLazy: bobLaziness==2,
+    winner: winner,
+    aliceLucky: aliceLucky
+  }
+});
 
 // ======== parameters and counterfactual functions =========
 
@@ -58,16 +78,6 @@ var stickyRand = function(actualRVs) {
     return flip(stickiness) ? actualRVs[key] : freshRVs[key];
   }, actualRVs);
 };
-
-var contextualEval = cache(function(proposition, world) {
-  var context = 'var aliceStrong = ' + JSON.stringify(world.aliceStrong) + ';' +
-      'var aliceLazy = ' + JSON.stringify(world.aliceLazy) + ';' +
-      'var bobStrong = ' + JSON.stringify(world.bobStrong) + ';' +
-      'var bobLazy = ' + JSON.stringify(world.bobLazy) + ';' +
-      'var aliceWin = ' + JSON.stringify(world.aliceWin) + ';';
-  //print(context + proposition);
-  return(webpplEval(context + proposition));
-});
 
 var checkPossible = function(unfactoredERP) {
   var factorERP = Enumerate(function() {
@@ -86,20 +96,14 @@ var checkPossible = function(unfactoredERP) {
 };
 
 var counterfactualERP = function(ifA, thenB, actualRVs) {
-  //print(ifA);
-  //print(thenB);
-  //print(actualRVs);
   var unfactoredERP = Enumerate(function() {
     var counterfactualRVs = stickyRand(actualRVs);
-    //print(counterfactualRVs);
     var counterfactualWorld = vars(counterfactualRVs);
-    //print(counterfactualWorld);
     return {
       result: contextualEval(thenB, counterfactualWorld),
       factor: (contextualEval(ifA, counterfactualWorld) ? 0 : -Infinity)
     }
   });
-  //unfactoredERP.print();
   return checkPossible(unfactoredERP);
 };
 
@@ -109,23 +113,20 @@ var because = function(conditionA, resultB, actualWorld, actualRVs) {
   var actuallyA = contextualEval(conditionA, actualWorld);
   var actuallyB = contextualEval(resultB, actualWorld);
 
-  // debugging:
-  //print(conditionA + "? " + actuallyA);
-  //print(resultB + "? " + actuallyB);
+  // //// without "presuppositions"
+  // var ifNotA = "!" + conditionA;
+  // var thenNotB = "!" + resultB;
+  // var cfERP = counterfactualERP(ifNotA, thenNotB, actualRVs, model, params);
+  // return cfERP == 'impossible' ? -Infinity : cfERP.score([], true);
 
-  if (actuallyA & actuallyB) {
-    // debugging:
-    //print("both true!");
+  //// with "presuppositions"
+  if (actuallyA & actuallyB) {;
 
-    var ifNotA = "!" + conditionA;
-    var thenNotB = "!" + resultB;
-
-    // debugging:
-    //print("if " + ifNotA + " then " + thenNotB);
+    var ifNotA = "!(" + conditionA + ")";
+    var thenNotB = "!(" + resultB + ")";
 
     var cfERP = counterfactualERP(ifNotA, thenNotB, actualRVs);
-    //print("because " + conditionA + ", " + resultB);
-    //cfERP.print();
+
     return cfERP == 'impossible' ? -Infinity : cfERP.score([], true);;
   } else {
     return -Infinity;
@@ -138,22 +139,27 @@ var because = function(conditionA, resultB, actualWorld, actualRVs) {
    it is the proportion of counterfactual worlds satisfying conditionA
    in which resultB is also true.
 */
+
 var meaning_factor = cache(function(utterance, world, rVs) {
   if (utterance == 'nothing') {
     return 0;
   } else {
     var words = utterance.split(' ');
-    if (words.length < 2 | words[1] != 'because') {
-      return contextualEval(utterance, world) ? 0 : -Infinity;
+    var negation = words[0] == "itisnotthecasethat";
+    var doubleNegation = negation ? words[1] == "itisnotthecasethat" : false;
+    var restOfWords = doubleNegation ? words.slice(2) : negation ? words.slice(1) : words;
+    if (restOfWords.length < 2 | restOfWords[1] != 'because') {
+      var isTrue = contextualEval(restOfWords.join(' '), world);
+      // if negation, check that negated utterance is true
+      return (doubleNegation ? isTrue : negation ? !isTrue : isTrue) ? 0 : -Infinity;
     } else {
       // "resultB because conditionA"
-      var resultB = words[0];
-      var conditionA = words[2];
+      var resultB = restOfWords[0];
+      var conditionA = restOfWords[2];
 
-      // debugging:
-      //print("because " + conditionA + ", " + resultB);
+      var becauseIsTrue = because(conditionA, resultB, world, rVs);
 
-      return because(conditionA, resultB, world, rVs);
+      return doubleNegation ? becauseIsTrue : negation ? !becauseIsTrue : becauseIsTrue;
     }
   }
 });
@@ -162,10 +168,12 @@ var literalERP = cache(function(utterance) {
   var unfactoredERP = Enumerate(function() {
     var actualRVs = rand();
     var actualWorld = vars(actualRVs);
-    //print(actualWorld);
     return {
       result: actualWorld,
-      factor: meaning_factor(utterance, actualWorld, actualRVs)
+      factor: meaning_factor(utterance, actualWorld, actualRVs) +
+        meaning_factor('winner=="Alice"', actualWorld)
+        // let's say that everybody knows that alice won.
+        // we're asking 'why alice win?'
     };
   });
   return checkPossible(unfactoredERP);
@@ -173,26 +181,61 @@ var literalERP = cache(function(utterance) {
 
 var alpha = 5;
 
+var getCostUtterance = function(utterance) {
+  if (utterance == "nothing") {
+    return 0;
+  } else {
+    var words = utterance.split(" ");
+    var chars = utterance.split("");
+    var negs = filter(function(x) {return x == "!";}, chars);
+    return words.length;
+  }
+};
+
+// var basePropositions = ['A', 'B'];
+
+// // var basePropositions = function() {
+// //   var RVs = rand();
+// //   var world = vars(RVs);
+// //   return map(
+// //     function(keyVal) {
+// //       return keyVal[0];
+// //     },
+// //     filter(
+// //       function(keyVal) {
+// //         return typeof(keyVal[1]) == 'boolean';
+// //       },
+// //       _.pairs(world)
+// //     )
+// //   );
+// // }();
+
+var utterances = [
+  'nothing',
+
+  'winner=="Alice" because winner=="Alice"',
+
+  'winner=="Alice" because aliceStrong',
+  'winner=="Alice" because !aliceStrong',
+  'winner=="Alice" because aliceLazy',
+  'winner=="Alice" because !aliceLazy',
+
+  'winner=="Alice" because bobStrong',
+  'winner=="Alice" because !bobStrong',
+  'winner=="Alice" because bobLazy',
+  'winner=="Alice" because !bobLazy'
+];
+
 var getUtterancePrior = function(utterance) {
-  var basePropositions = ['aliceStrong', 'aliceLazy', 'bobStrong', 'bobLazy', 'aliceWin'];
-  var getAlternativeUtterances = function(utterance) {
-    var negPropositions = map(function(p) {return "!" + p;}, basePropositions);
-    var simplePropositions = negPropositions.concat(basePropositions);
-    return [utterance, "nothing"].concat(
-      simplePropositions
-    );
-  };
-  var utterances = getAlternativeUtterances(utterance);
-  var costs = map(function(utterance) {
-    if (utterance == "nothing") {
-      return 0;
-    } else {
-      var words = utterance.split(" ");
-      var chars = utterance.split("");
-      var negs = filter(function(x) {return x == "!";}, chars);
-      return words.length;
-    }
-  }, utterances);
+  // var getAlternativeUtterances = function(utterance) {
+  //   var negPropositions = map(function(p) {return "!" + p;}, basePropositions);
+  //   var simplePropositions = negPropositions.concat(basePropositions);
+  //   return [utterance, "nothing", "itisnotthecasethat " + utterance].concat(
+  //     simplePropositions
+  //   );
+  // };
+  // var utterances = getAlternativeUtterances(utterance);
+  var costs = map(getCostUtterance, utterances);
   return function() {
     var probabilities = map(function(x) {return Math.exp(-x);}, costs);
     return utterances[discrete(probabilities)];
@@ -213,43 +256,67 @@ var speakerERP = cache(function(world, baseUtterance) {
   return checkPossible(unfactoredERP);
 });
 
-var listenerERP = function(utterance) {
+var listenerERP = cache(function(utterance) {
   return Enumerate(function() {
     var actualRVs = rand();
     var actualWorld = vars(actualRVs);
     //print(actualWorld);
     var description = speakerERP(actualWorld, utterance /*give speaker utterance to generate relevant alternatives*/);
     factor(
-      description == 'impossible' ? -Infinity : description.score([], utterance) * alpha
+      (description == 'impossible' ? -Infinity : description.score([], utterance) * alpha)  +
+        meaning_factor('winner=="Alice"', actualWorld)
+        // let's say that everybody knows that alice won.
+        // we're asking 'why alice win?'
     );
     return actualWorld;
   });
-};
+});
 
-// ======== examples =========
+// // var speaker2ERP = function(utterance, world) {
+// //   var s2Utterances = [utterance, "itisnotthecasethat " + utterance];
+// //   var s2costs = map(getCostUtterance, s2Utterances);
+// //   var s2UtterancePrior = function() {
+// //     var probabilities = map(function(x) {return Math.exp(-x);}, s2costs);
+// //     return s2Utterances[discrete(probabilities)];
+// //   };
+// //   return Enumerate(function() {
+// //     var utt = s2UtterancePrior();
+// //     var interpretation = listenerERP(utt);
+// //     factor( interpretation.score([], world) );
+// //     return utt==utterance ? 'yes' : 'no';
+// //   });
+// // };
 
-print('aliceWin & bobLazy');
-printERP(listenerERP('aliceWin & bobLazy'));
+// // ======== examples =========
 
-print('aliceWin because bobLazy');
-printERP(listenerERP('aliceWin because bobLazy'));
-
-print('aliceWin & aliceStrong');
-printERP(listenerERP('aliceWin & aliceStrong'));
-
-print('aliceWin because aliceStrong');
-printERP(listenerERP('aliceWin because aliceStrong'));
-
-print('aliceWin & !aliceLazy');
-printERP(listenerERP('aliceWin & !aliceLazy'));
-
-print('aliceWin because !aliceLazy');
-printERP(listenerERP('aliceWin because !aliceLazy'));
-
-print('aliceWin & !bobStrong');
-printERP(listenerERP('aliceWin & !bobStrong'));
-
-print('aliceWin because !bobStrong');
-printERP(listenerERP('aliceWin because !bobStrong'));
+print('literal')
+print('=======')
+print('print("nothing")');
+vizPrint(literalERP('nothing'));
+print('print("alice win because alice win")');
+vizPrint(literalERP('winner=="Alice" because winner=="Alice"'));
+print('print("alice win because alice strong")');
+vizPrint(literalERP('winner=="Alice" because aliceStrong'));
+print('print("alice win because alice tried")');
+vizPrint(literalERP('winner=="Alice" because !aliceLazy'));
+print('print("alice win because bob weak")');
+vizPrint(literalERP('winner=="Alice" because !bobStrong'));
+print('print("alice win because bob lazy")');
+vizPrint(literalERP('winner=="Alice" because bobLazy'));
+print('');
+print('pragmatic');
+print('=========');
+print('print("nothing")');
+vizPrint(listenerERP('nothing'));
+print('print("alice win because alice win")');
+vizPrint(listenerERP('winner=="Alice" because winner=="Alice"'));
+print('print("alice win because alice strong")');
+vizPrint(listenerERP('winner=="Alice" because aliceStrong'));
+print('print("alice win because alice tried")');
+vizPrint(listenerERP('winner=="Alice" because !aliceLazy'));
+print('print("alice win because bob weak")');
+vizPrint(listenerERP('winner=="Alice" because !bobStrong'));
+print('print("alice win because bob lazy")');
+vizPrint(listenerERP('winner=="Alice" because bobLazy'));
 
 "finished"

@@ -182,8 +182,8 @@ var because = function(conditionA, resultB, actualWorld, actualRVs, model, param
   //// with "presuppositions"
   if (actuallyA & actuallyB) {;
 
-    var ifNotA = "!" + conditionA;
-    var thenNotB = "!" + resultB;
+    var ifNotA = "!(" + conditionA + ")";
+    var thenNotB = "!(" + resultB + ")";
 
     var cfERP = counterfactualERP(ifNotA, thenNotB, actualRVs, model, params);
 
@@ -369,8 +369,8 @@ var listenerERP = cache(function(utterance) {
 
 // ======== examples =========
 
-print('print("nothing")');
-var resultERP = listenerERP('nothing');
+print('print("B because A")');
+var resultERP = listenerERP('B because A');
 print(resultERP.MAP());
 
 printERP(Enumerate(function() {
