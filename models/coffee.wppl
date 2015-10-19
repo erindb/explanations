@@ -22,8 +22,6 @@ var contextualEval = cache(function(proposition, world) {
     "",
     _.pairs(world)
   );
-  print(context);
-  print(context + proposition + ';');
   return webpplEval(context + proposition + ';');
 });
 
@@ -208,7 +206,6 @@ var literalERP = cache(function(utterance) {
   var unfactoredERP = Enumerate(function() {
     var actualRVs = rand();
     var actualWorld = vars(actualRVs);
-    //print(actualWorld);
     return {
       result: actualWorld,
       factor: meaning_factor(utterance, actualWorld, actualRVs)
@@ -314,7 +311,7 @@ printERP(speakerERP(
       drinkIsCaffeinated: true,
       stayUp: false,
       finishPaper: false
-  }, 'drink=="coffee"'
+  }, 'stayUp because bobsGoal=="finishPaper"'
 ));
 
 // print('basic world: stay up because want finish paper (teleo)')
@@ -333,6 +330,19 @@ printERP(speakerERP(
 // print('basic world: stay up because paper not finished (causal)')
 // printERP(speaker2ERP(
 //   'stayUp because !paperAlreadyFinished',
+//   {
+//     paperDueTomorrow: true,
+//     paperAlreadyFinished: false,
+//     bobsGoal: 'finishPaper',
+//     drink: 'coffee',
+//     drinkIsCaffeinated: true,
+//     stayUp: true,
+//     finishPaper: true
+//   }
+// ));
+// print('basic world: stay up because drank coffee (causal)')
+// printERP(speaker2ERP(
+//   'stayUp because drink=="coffee"',
 //   {
 //     paperDueTomorrow: true,
 //     paperAlreadyFinished: false,
