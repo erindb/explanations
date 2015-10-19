@@ -36,7 +36,7 @@ var contextualEval = cache(function(proposition, world) {
 // ======== model specification =========
 
 var getParam = function() {
-  return (randomInteger(8)+1)/10;
+  return (randomInteger(9)+1)/10;
 };
 
 var getParams = function() {
@@ -245,7 +245,8 @@ var literalERP = cache(function(utterance) {
         p0: params[0],
         p1: params[1]
       },
-      factor: meaning_factor(utterance, actualWorld, actualRVs, model, params)
+      factor: meaning_factor(utterance, actualWorld, actualRVs, model, params) +
+        meaning_factor('B', actualWorld)
     };
   });
   return checkPossible(unfactoredERP);
@@ -258,32 +259,11 @@ var getCostUtterance = function(utterance) {
     return 0;
   } else {
     var words = utterance.split(" ");
-    var chars = utterance.split("");
-    var negs = filter(function(x) {return x == "!";}, chars);
     return words.length;
   }
 };
 
-var basePropositions = ['A', 'B'];
-
-// var basePropositions = function() {
-//   var RVs = rand();
-//   var world = vars(RVs);
-//   return map(
-//     function(keyVal) {
-//       return keyVal[0];
-//     },
-//     filter(
-//       function(keyVal) {
-//         return typeof(keyVal[1]) == 'boolean';
-//       },
-//       _.pairs(world)
-//     )
-//   );
-// }();
-
-var utterances = [
-  'nothing',
+var basePropositions = [
   // 'A', 'B', '!A', '!B',
   // 'A & B', 'A & !B', '!A & B', '!A & !B',
   'B because A', 'B because !A', 'B because B'
@@ -293,14 +273,12 @@ var utterances = [
 ];
 
 var getUtterancePrior = function(utterance) {
-  // var getAlternativeUtterances = function(utterance) {
-  //   var negPropositions = map(function(p) {return "!" + p;}, basePropositions);
-  //   var simplePropositions = negPropositions.concat(basePropositions);
-  //   return [utterance, "nothing", "itisnotthecasethat " + utterance].concat(
-  //     simplePropositions
-  //   );
-  // };
-  // var utterances = getAlternativeUtterances(utterance);
+  var getAlternativeUtterances = function(utterance) {
+    return [utterance, "nothing", "itisnotthecasethat " + utterance].concat(
+      basePropositions
+    );
+  };
+  var utterances = getAlternativeUtterances(utterance);
   var costs = map(getCostUtterance, utterances);
   return function() {
     var probabilities = map(function(x) {return Math.exp(-x);}, costs);
@@ -342,7 +320,8 @@ var listenerERP = cache(function(utterance) {
     //print(actualWorld);
     var description = speakerERP(actualWorld, utterance, model, params /*give speaker utterance to generate relevant alternatives*/);
     factor(
-      description == 'impossible' ? -Infinity : description.score([], utterance) * alpha
+      description == 'impossible' ? -Infinity : description.score([], utterance) * alpha +
+        meaning_factor('B', actualWorld)
     );
     return {
       model: model,
@@ -352,69 +331,69 @@ var listenerERP = cache(function(utterance) {
   });
 });
 
-// var speaker2ERP = function(utterance, world) {
-//   var s2Utterances = [utterance, "itisnotthecasethat " + utterance];
-//   var s2costs = map(getCostUtterance, s2Utterances);
-//   var s2UtterancePrior = function() {
-//     var probabilities = map(function(x) {return Math.exp(-x);}, s2costs);
-//     return s2Utterances[discrete(probabilities)];
-//   };
-//   return Enumerate(function() {
-//     var utt = s2UtterancePrior();
-//     var interpretation = listenerERP(utt);
-//     factor( interpretation.score([], world) );
-//     return utt==utterance ? 'yes' : 'no';
-//   });
-// };
+var speaker2ERP = function(utterance, world, model, params) {
+  var s2Utterances = [utterance, "itisnotthecasethat " + utterance];
+  var s2costs = map(getCostUtterance, s2Utterances);
+  var s2UtterancePrior = function() {
+    var probabilities = map(function(x) {return Math.exp(-x);}, s2costs);
+    return s2Utterances[discrete(probabilities)];
+  };
+  var desiredInterpretation = {
+    model: model,
+    p0: params[0],
+    p1: params[1]
+  }
+  return Enumerate(function() {
+    var utt = s2UtterancePrior();
+    var interpretation = listenerERP(utt);
+    factor( interpretation.score([], desiredInterpretation) );
+    return utt==utterance ? 'yes' : 'no';
+  });
+};
 
 // ======== examples =========
 
-print('print("B because A")');
-var resultERP = listenerERP('B because A');
-print(resultERP.MAP());
+print('print("B because !A; cause !A")');
+printERP(speaker2ERP('B because !A', {B: true, A: false}, 'cause', [0.5, 0.9]));
+print('print("B because B; cause !A")');
+printERP(speaker2ERP('B because B', {B: true, A: false}, 'cause', [0.5, 0.9]));
 
-printERP(Enumerate(function() {
-  return sample(resultERP).model;
-}))
+print('print("B because A; cause A")');
+printERP(speaker2ERP('B because A', {B: true, A: true}, 'cause', [0.5, 0.9]));
+print('print("B because B; cause A")');
+printERP(speaker2ERP('B because B', {B: true, A: true}, 'cause', [0.5, 0.9]));
 
-print('print("cause")');
-vizPrintERP(Enumerate(function() {
-  var res = sample(resultERP);
-  condition(res.model == 'cause');
-  return {
-    pA: 'pA=' + JSON.stringify(res.p0),
-    pL: 'pL=' + JSON.stringify(res.p1)
-  };
-}));
 
-print('print("reverseCause")');
-vizPrintERP(Enumerate(function() {
-  var res = sample(resultERP);
-  condition(res.model == 'reverseCause');
-  return {
-    pB: 'pB=' + JSON.stringify(res.p0),
-    pL: 'pL=' + JSON.stringify(res.p1)
-  };
-}));
+print('print("B because !A; reverseCause !A")');
+printERP(speaker2ERP('B because !A', {B: true, A: false}, 'reverseCause', [0.5, 0.9]));
+print('print("B because B; reverseCause !A")');
+printERP(speaker2ERP('B because B', {B: true, A: false}, 'reverseCause', [0.5, 0.9]));
 
-print('print("commonCause")');
-vizPrintERP(Enumerate(function() {
-  var res = sample(resultERP);
-  condition(res.model == 'commonCause');
-  return {
-    pC: 'pC=' + JSON.stringify(res.p0),
-    pL: 'pL=' + JSON.stringify(res.p1)
-  };
-}));
+print('print("B because A; reverseCause A")');
+printERP(speaker2ERP('B because A', {B: true, A: true}, 'reverseCause', [0.5, 0.9]));
+print('print("B because B; reverseCause A")');
+printERP(speaker2ERP('B because B', {B: true, A: true}, 'reverseCause', [0.5, 0.9]));
 
-print('print("independent")');
-vizPrintERP(Enumerate(function() {
-  var res = sample(resultERP);
-  condition(res.model == 'independent');
-  return {
-    pA: 'pA=' + JSON.stringify(res.p0),
-    pB: 'pB=' + JSON.stringify(res.p1)
-  };
-}));
+
+print('print("B because !A; commonCause !A")');
+printERP(speaker2ERP('B because !A', {B: true, A: false}, 'commonCause', [0.5, 0.9]));
+print('print("B because B; commonCause !A")');
+printERP(speaker2ERP('B because B', {B: true, A: false}, 'commonCause', [0.5, 0.9]));
+
+print('print("B because A; commonCause A")');
+printERP(speaker2ERP('B because A', {B: true, A: true}, 'commonCause', [0.5, 0.9]));
+print('print("B because B; commonCause A")');
+printERP(speaker2ERP('B because B', {B: true, A: true}, 'commonCause', [0.5, 0.9]));
+
+
+print('print("B because !A; independent !A")');
+printERP(speaker2ERP('B because !A', {B: true, A: false}, 'independent', [0.5, 0.9]));
+print('print("B because B; independent !A")');
+printERP(speaker2ERP('B because B', {B: true, A: false}, 'independent', [0.5, 0.9]));
+
+print('print("B because A; independent A")');
+printERP(speaker2ERP('B because A', {B: true, A: true}, 'independent', [0.5, 0.9]));
+print('print("B because B; independent A")');
+printERP(speaker2ERP('B because B', {B: true, A: true}, 'independent', [0.5, 0.9]));
 
 "finished"
