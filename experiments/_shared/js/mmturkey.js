@@ -127,7 +127,7 @@ turk = turk || {};
     }
 
     // Otherwise, submit the form
-    //form.action = turkSubmitTo;//turk.turkSubmitTo;// + "/mturk/externalSubmit";
+    form.action = turk.turkSubmitTo + "/mturk/externalSubmit";
     form.method = "POST";
     form.submit();
   }
