@@ -179,7 +179,7 @@ function init() {
 
   repeatWorker = false;
   (function(){
-      var ut_id = "explanations-exp1-alice-bob-conference-tshirts";
+      var ut_id = "explanations-exp1-alice-bob-conference-tshirts-take2";
       if (UTWorkerLimitReached(ut_id)) {
         $('.slide').empty();
         repeatWorker = true;
