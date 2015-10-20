@@ -189,12 +189,12 @@ function init() {
 
   exp.trials = [];
   exp.catch_trials = [];
-  exp.condition = _.sample(["listenerInferModel", "speaker2"]); //can randomize between subject conditions here
+  exp.condition = _.sample(["listenerInferModel"]);//, "speaker2"]); //can randomize between subject conditions here
   exp.explanation = _.sample([
     "Because Bob has a red shirt.",
-    "Because Bob has a blue shirt.",
-    "Because she has a red shirt.",
-    "Because."
+    //"Because Bob has a blue shirt.",
+    //"Because she has a red shirt.",
+    //"Because."
   ]); //can randomize between subject conditions here
   exp.bobShirtColor = _.sample(["red", "blue"]);
   exp.howShirtColors = _.sample([
