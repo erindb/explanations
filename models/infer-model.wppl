@@ -271,6 +271,7 @@ var basePropositions = [
   // '!B because A', '!B because !A',
   // '!A because B', '!A because !B'
 ];
+// var utterances = ["nothing"].concat(basePropositions);
 
 var getUtterancePrior = function(utterance) {
   var getAlternativeUtterances = function(utterance) {
@@ -353,47 +354,75 @@ var speaker2ERP = function(utterance, world, model, params) {
 
 // ======== examples =========
 
-print('print("B because !A; cause !A")');
-printERP(speaker2ERP('B because !A', {B: true, A: false}, 'cause', [0.5, 0.9]));
-print('print("B because B; cause !A")');
-printERP(speaker2ERP('B because B', {B: true, A: false}, 'cause', [0.5, 0.9]));
+print('print("B because A")');
+var resultERP = literalERP('B because A');
+printERP(Enumerate(function() {
+  var res = sample(resultERP);
+  return res.model
+}))
 
-print('print("B because A; cause A")');
-printERP(speaker2ERP('B because A', {B: true, A: true}, 'cause', [0.5, 0.9]));
-print('print("B because B; cause A")');
-printERP(speaker2ERP('B because B', {B: true, A: true}, 'cause', [0.5, 0.9]));
+print('print("B because B")');
+var resultERP = literalERP('B because B');
+printERP(Enumerate(function() {
+  var res = sample(resultERP);
+  return res.model
+}))
+
+print('print("B because !a")');
+var resultERP = literalERP('B because !A');
+printERP(Enumerate(function() {
+  var res = sample(resultERP);
+  return res.model
+}))
+
+print('print("nothing")');
+var resultERP = literalERP('nothing');
+printERP(Enumerate(function() {
+  var res = sample(resultERP);
+  return res.model
+}))
+
+// print('print("B because !A; cause !A")');
+// printERP(speaker2ERP('B because !A', {B: true, A: false}, 'cause', [0.5, 0.9]));
+// print('print("B because B; cause !A")');
+// printERP(speaker2ERP('B because B', {B: true, A: false}, 'cause', [0.5, 0.9]));
+
+// print('print("B because A; cause A")');
+// printERP(speaker2ERP('B because A', {B: true, A: true}, 'cause', [0.5, 0.9]));
+// print('print("B because B; cause A")');
+// printERP(speaker2ERP('B because B', {B: true, A: true}, 'cause', [0.5, 0.9]));
 
 
-print('print("B because !A; reverseCause !A")');
-printERP(speaker2ERP('B because !A', {B: true, A: false}, 'reverseCause', [0.5, 0.9]));
-print('print("B because B; reverseCause !A")');
-printERP(speaker2ERP('B because B', {B: true, A: false}, 'reverseCause', [0.5, 0.9]));
+// print('print("B because !A; reverseCause !A")');
+// printERP(speaker2ERP('B because !A', {B: true, A: false}, 'reverseCause', [0.5, 0.9]));
+// print('print("B because B; reverseCause !A")');
+// printERP(speaker2ERP('B because B', {B: true, A: false}, 'reverseCause', [0.5, 0.9]));
 
-print('print("B because A; reverseCause A")');
-printERP(speaker2ERP('B because A', {B: true, A: true}, 'reverseCause', [0.5, 0.9]));
-print('print("B because B; reverseCause A")');
-printERP(speaker2ERP('B because B', {B: true, A: true}, 'reverseCause', [0.5, 0.9]));
-
-
-print('print("B because !A; commonCause !A")');
-printERP(speaker2ERP('B because !A', {B: true, A: false}, 'commonCause', [0.5, 0.9]));
-print('print("B because B; commonCause !A")');
-printERP(speaker2ERP('B because B', {B: true, A: false}, 'commonCause', [0.5, 0.9]));
-
-print('print("B because A; commonCause A")');
-printERP(speaker2ERP('B because A', {B: true, A: true}, 'commonCause', [0.5, 0.9]));
-print('print("B because B; commonCause A")');
-printERP(speaker2ERP('B because B', {B: true, A: true}, 'commonCause', [0.5, 0.9]));
+// print('print("B because A; reverseCause A")');
+// printERP(speaker2ERP('B because A', {B: true, A: true}, 'reverseCause', [0.5, 0.9]));
+// print('print("B because B; reverseCause A")');
+// printERP(speaker2ERP('B because B', {B: true, A: true}, 'reverseCause', [0.5, 0.9]));
 
 
-print('print("B because !A; independent !A")');
-printERP(speaker2ERP('B because !A', {B: true, A: false}, 'independent', [0.5, 0.9]));
-print('print("B because B; independent !A")');
-printERP(speaker2ERP('B because B', {B: true, A: false}, 'independent', [0.5, 0.9]));
+// print('print("B because !A; commonCause !A")');
+// printERP(speaker2ERP('B because !A', {B: true, A: false}, 'commonCause', [0.5, 0.9]));
+// print('print("B because B; commonCause !A")');
+// printERP(speaker2ERP('B because B', {B: true, A: false}, 'commonCause', [0.5, 0.9]));
 
-print('print("B because A; independent A")');
-printERP(speaker2ERP('B because A', {B: true, A: true}, 'independent', [0.5, 0.9]));
-print('print("B because B; independent A")');
-printERP(speaker2ERP('B because B', {B: true, A: true}, 'independent', [0.5, 0.9]));
+// print('print("B because A; commonCause A")');
+// printERP(speaker2ERP('B because A', {B: true, A: true}, 'commonCause', [0.5, 0.9]));
+// print('print("B because B; commonCause A")');
+// printERP(speaker2ERP('B because B', {B: true, A: true}, 'commonCause', [0.5, 0.9]));
+
+
+// print('print("B because !A; independent !A")');
+// printERP(speaker2ERP('B because !A', {B: true, A: false}, 'independent', [0.5, 0.9]));
+// print('print("B because B; independent !A")');
+// printERP(speaker2ERP('B because B', {B: true, A: false}, 'independent', [0.5, 0.9]));
+
+// print('print("B because A; independent A")');
+// printERP(speaker2ERP('B because A', {B: true, A: true}, 'independent', [0.5, 0.9]));
+// print('print("B because B; independent A")');
+// printERP(speaker2ERP('B because B', {B: true, A: true}, 'independent', [0.5, 0.9]));
 
 "finished"
