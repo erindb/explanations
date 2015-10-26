@@ -7,8 +7,9 @@ var print = function(str) {
 var printERP = function(erp) {
   var support = erp.support();
   var probs = map(function(x) {return Math.exp(erp.score([], x));}, support);
-  print(support);
-  print(probs);
+  print("var s = " + JSON.stringify(support) + ";");
+  print("var p = " + JSON.stringify(probs) + ";");
+  print("print(Enumerate(function() {return s[discrete(p)];}))")
 };
 
 // ======== model specification =========
@@ -98,23 +99,34 @@ var because = function(conditionA, resultB, actualWorld, actualRVs) {
   //print(conditionA + "? " + actuallyA);
   //print(resultB + "? " + actuallyB);
 
-  if (actuallyA & actuallyB) {
-    // debugging:
-    //print("both true!");
+  var ifNotA = "!" + conditionA;
+  var thenNotB = "!" + resultB;
 
-    var ifNotA = "!" + conditionA;
-    var thenNotB = "!" + resultB;
+  // debugging:
+  //print("if " + ifNotA + " then " + thenNotB);
 
-    // debugging:
-    //print("if " + ifNotA + " then " + thenNotB);
+  var cfERP = counterfactualERP(ifNotA, thenNotB, actualRVs);
+  //print("because " + conditionA + ", " + resultB);
+  //cfERP.print();
+  return cfERP == 'impossible' ? -Infinity : cfERP.score([], true);
 
-    var cfERP = counterfactualERP(ifNotA, thenNotB, actualRVs);
-    //print("because " + conditionA + ", " + resultB);
-    //cfERP.print();
-    return cfERP == 'impossible' ? -Infinity : cfERP.score([], true);;
-  } else {
-    return -Infinity;
-  }
+  // if (actuallyA & actuallyB) {
+  //   // debugging:
+  //   //print("both true!");
+
+  //   var ifNotA = "!" + conditionA;
+  //   var thenNotB = "!" + resultB;
+
+  //   // debugging:
+  //   //print("if " + ifNotA + " then " + thenNotB);
+
+  //   var cfERP = counterfactualERP(ifNotA, thenNotB, actualRVs);
+  //   //print("because " + conditionA + ", " + resultB);
+  //   //cfERP.print();
+  //   return cfERP == 'impossible' ? -Infinity : cfERP.score([], true);;
+  // } else {
+  //   return -Infinity;
+  // }
 };
 
 /*
@@ -132,7 +144,7 @@ var meaning_factor = cache(function(utterance, world, rVs) {
     var doubleNegation = negation ? words[1] == "itisnotthecasethat" : false;
     var restOfWords = doubleNegation ? words.slice(2) : negation ? words.slice(1) : words;
     if (restOfWords.length < 2 | restOfWords[1] != 'because') {
-      var isTrue = contextualEval(utterance, world);
+      var isTrue = contextualEval(restOfWords.join(' '), world);
       // if negation, check that negated utterance is true
       return (doubleNegation ? isTrue : negation ? !isTrue : isTrue) ? 0 : -Infinity;
     } else {
@@ -231,16 +243,35 @@ var speaker2ERP = function(utterance, world) {
     var utt = s2UtterancePrior();
     var interpretation = listenerERP(utt);
     factor( interpretation.score([], world) );
-    return utt;
+    return utt==utterance ? 'yes' : 'no';
   });
 };
 
 // ======== examples =========
 
-print('neighbors because bacon when smokeAlarm is true');
+print('print("neighbors because smokeAlarm")');
+printERP(speaker2ERP('neighbors because smokeAlarm', {bacon: true, smokeAlarm: true, neighbors: true}));
+
+print('print("smokeAlarm because bacon")');
+printERP(speaker2ERP('smokeAlarm because bacon', {bacon: true, smokeAlarm: true, neighbors: true}));
+
+print('print("smokeAlarm because neighbors")');
+printERP(speaker2ERP('smokeAlarm because neighbors', {bacon: true, smokeAlarm: true, neighbors: true}));
+
+print('print("bacon because smokeAlarm")');
+printERP(speaker2ERP('bacon because smokeAlarm', {bacon: true, smokeAlarm: true, neighbors: true}));
+
+print('print("neighbors because bacon when smokeAlarm is true")');
 printERP(speaker2ERP('neighbors because bacon', {bacon: true, smokeAlarm: true, neighbors: true}));
 
-print('neighbors because bacon when smokeAlarm is false');
+print('print("neighbors because bacon when smokeAlarm is false")');
 printERP(speaker2ERP('neighbors because bacon', {bacon: true, smokeAlarm: false, neighbors: true}));
+
+print('print("bacon because neighbors when smokeAlarm is true")');
+printERP(speaker2ERP('neighbors because bacon', {bacon: true, smokeAlarm: true, neighbors: true}));
+
+print('print("bacon because neighbors when smokeAlarm is false")');
+printERP(speaker2ERP('neighbors because bacon', {bacon: true, smokeAlarm: false, neighbors: true}));
+
 
 "finished"

@@ -289,34 +289,37 @@ var listenerERP = cache(function(utterance) {
 
 // // ======== examples =========
 
-print('literal')
-print('=======')
-print('print("nothing")');
-vizPrint(literalERP('nothing'));
-print('print("alice win because alice win")');
-vizPrint(literalERP('winner=="Alice" because winner=="Alice"'));
-print('print("alice win because alice strong")');
-vizPrint(literalERP('winner=="Alice" because aliceStrong'));
-print('print("alice win because alice tried")');
-vizPrint(literalERP('winner=="Alice" because !aliceLazy'));
-print('print("alice win because bob weak")');
-vizPrint(literalERP('winner=="Alice" because !bobStrong'));
-print('print("alice win because bob lazy")');
+vizPrint(literalERP('winner=="Alice" & bobLazy'));
 vizPrint(literalERP('winner=="Alice" because bobLazy'));
-print('');
-print('pragmatic');
-print('=========');
-print('print("nothing")');
-vizPrint(listenerERP('nothing'));
-print('print("alice win because alice win")');
-vizPrint(listenerERP('winner=="Alice" because winner=="Alice"'));
-print('print("alice win because alice strong")');
-vizPrint(listenerERP('winner=="Alice" because aliceStrong'));
-print('print("alice win because alice tried")');
-vizPrint(listenerERP('winner=="Alice" because !aliceLazy'));
-print('print("alice win because bob weak")');
-vizPrint(listenerERP('winner=="Alice" because !bobStrong'));
-print('print("alice win because bob lazy")');
-vizPrint(listenerERP('winner=="Alice" because bobLazy'));
+
+// print('literal')
+// print('=======')
+// print('print("nothing")');
+// vizPrint(literalERP('nothing'));
+// print('print("alice win because alice win")');
+// vizPrint(literalERP('winner=="Alice" because winner=="Alice"'));
+// print('print("alice win because alice strong")');
+// vizPrint(literalERP('winner=="Alice" because aliceStrong'));
+// print('print("alice win because alice tried")');
+// vizPrint(literalERP('winner=="Alice" because !aliceLazy'));
+// print('print("alice win because bob weak")');
+// vizPrint(literalERP('winner=="Alice" because !bobStrong'));
+// print('print("alice win because bob lazy")');
+// vizPrint(literalERP('winner=="Alice" because bobLazy'));
+// print('');
+// print('pragmatic');
+// print('=========');
+// print('print("nothing")');
+// vizPrint(listenerERP('nothing'));
+// print('print("alice win because alice win")');
+// vizPrint(listenerERP('winner=="Alice" because winner=="Alice"'));
+// print('print("alice win because alice strong")');
+// vizPrint(listenerERP('winner=="Alice" because aliceStrong'));
+// print('print("alice win because alice tried")');
+// vizPrint(listenerERP('winner=="Alice" because !aliceLazy'));
+// print('print("alice win because bob weak")');
+// vizPrint(listenerERP('winner=="Alice" because !bobStrong'));
+// print('print("alice win because bob lazy")');
+// vizPrint(listenerERP('winner=="Alice" because bobLazy'));
 
 "finished"

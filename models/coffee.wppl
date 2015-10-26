@@ -7,8 +7,8 @@ var print = function(str) {
 var printERP = function(erp) {
   var support = erp.support();
   var probs = map(function(x) {return Math.exp(erp.score([], x));}, support);
-  print("var s = " + support + ";");
-  print("var p = " + probs + ";");
+  print("var s = " + JSON.stringify(support) + ";");
+  print("var p = " + JSON.stringify(probs) + ";");
   print("vizPrint(Enumerate(function() {return s[discrete(p)];}))")
 };
 
@@ -303,20 +303,61 @@ var speaker2ERP = function(utterance, world) {
 
 // ======== examples =========
 
-printERP(speakerERP(
-  { paperDueTomorrow: false,
-      paperAlreadyFinished: false,
-      bobsGoal: 'true',
-      drink: 'coffee',
-      drinkIsCaffeinated: true,
-      stayUp: false,
-      finishPaper: false
-  }, 'stayUp because bobsGoal=="finishPaper"'
+print('basic world: stay up because want finish paper (teleo)')
+printERP(speaker2ERP(
+  'stayUp because bobsGoal=="finishPaper"',
+  {
+    paperDueTomorrow: true,
+    paperAlreadyFinished: false,
+    bobsGoal: 'finishPaper',
+    drink: 'coffee',
+    drinkIsCaffeinated: true,
+    stayUp: true,
+    finishPaper: true
+  }
 ));
-
-// print('basic world: stay up because want finish paper (teleo)')
+print('basic world: stay up because paper not finished (causal)')
+printERP(speaker2ERP(
+  'stayUp because !paperAlreadyFinished',
+  {
+    paperDueTomorrow: true,
+    paperAlreadyFinished: false,
+    bobsGoal: 'finishPaper',
+    drink: 'coffee',
+    drinkIsCaffeinated: true,
+    stayUp: true,
+    finishPaper: true
+  }
+));
+print('basic world: stay up because drank coffee (causal)')
+printERP(speaker2ERP(
+  'stayUp because drink=="coffee"',
+  {
+    paperDueTomorrow: true,
+    paperAlreadyFinished: false,
+    bobsGoal: 'finishPaper',
+    drink: 'coffee',
+    drinkIsCaffeinated: true,
+    stayUp: true,
+    finishPaper: true
+  }
+));
+print('basic world: stay up because paper due tomorrow')
+printERP(speaker2ERP(
+  'stayUp because paperDueTomorrow',
+  {
+    paperDueTomorrow: true,
+    paperAlreadyFinished: false,
+    bobsGoal: 'finishPaper',
+    drink: 'coffee',
+    drinkIsCaffeinated: true,
+    stayUp: true,
+    finishPaper: true
+  }
+));
+// print('basic world: drink coffee because stay up')
 // printERP(speaker2ERP(
-//   'stayUp because bobsGoal=="finishPaper"',
+//   'drinkCoffee because stayUp',
 //   {
 //     paperDueTomorrow: true,
 //     paperAlreadyFinished: false,
@@ -327,9 +368,9 @@ printERP(speakerERP(
 //     finishPaper: true
 //   }
 // ));
-// print('basic world: stay up because paper not finished (causal)')
+// print('basic world: drink coffee because ')
 // printERP(speaker2ERP(
-//   'stayUp because !paperAlreadyFinished',
+//   'drinkCoffee because ',
 //   {
 //     paperDueTomorrow: true,
 //     paperAlreadyFinished: false,
@@ -340,22 +381,9 @@ printERP(speakerERP(
 //     finishPaper: true
 //   }
 // ));
-// print('basic world: stay up because drank coffee (causal)')
+// print('basic world: drink coffee because ')
 // printERP(speaker2ERP(
-//   'stayUp because drink=="coffee"',
-//   {
-//     paperDueTomorrow: true,
-//     paperAlreadyFinished: false,
-//     bobsGoal: 'finishPaper',
-//     drink: 'coffee',
-//     drinkIsCaffeinated: true,
-//     stayUp: true,
-//     finishPaper: true
-//   }
-// ));
-// print('basic world: stay up because paper not finished (causal)')
-// printERP(speaker2ERP(
-//   'stayUp because !paperAlreadyFinished',
+//   'drinkCoffee because ',
 //   {
 //     paperDueTomorrow: true,
 //     paperAlreadyFinished: false,
@@ -369,13 +397,6 @@ printERP(speakerERP(
 
 
 "finished"
-
-// Why did Bob stay up all night?
-// - to finish the paper (teleo)
-// - he drank coffee (causal)
-// - his paper is due tomorrow (causal)
-// - coffee makes you stay up late (causal + lawlike)
-// - staying up all night can get papers finished (causal + lawlike)
 
 // Why did Bob drink coffee?
 // - because it's caffeinated
