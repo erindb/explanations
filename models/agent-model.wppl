@@ -1,0 +1,302 @@
+// ======== compatibility with  =========
+
+var print = function(str) {
+  console.log(str);
+};
+
+var printERP = function(erp) {
+  var support = erp.support();
+  var probs = map(function(x) {return Math.exp(erp.score([], x));}, support);
+  print("var s = " + JSON.stringify(support) + ";");
+  print("var p = " + JSON.stringify(probs) + ";");
+  print("print(Enumerate(function() {return s[discrete(p)];}))")
+};
+
+var vizPrint = function(erp) {
+  var support = erp.support();
+  var probs = map(function(x) {return Math.exp(erp.score([], x));}, support);
+  print("var s = " + JSON.stringify(support) + ";");
+  print("var p = " + JSON.stringify(probs) + ";");
+  print("vizPrint(Enumerate(function() {return s[discrete(p)];}))")
+};
+
+// ======== other utilities =========
+
+var contextualEval = cache(function(proposition, world) {
+  var context = reduce(
+    function(keyVal, acc) {
+      return acc + ' var ' + keyVal[0] + ' = ' + JSON.stringify(keyVal[1]) + ';';
+    },
+    "",
+    _.pairs(world)
+  );
+  return webpplEval(context + proposition + ';');
+});
+
+// ======== model specification =========
+
+var rand = function() {
+  return {
+    wantFinish: flip(0.5),
+    action: uniformDraw([0.2, 0.4, 0.6, 0.8]),
+    stayupHelpsPaper: flip(0.9)
+  };
+};
+
+var vars = cache(function(actualRVs) {
+  var wantFinish = actualRVs.wantFinish;
+  var stayUpPrior = function() { return flip(0.1); };
+  var resultOfAction = function(stayUpVal, internalrVs) {
+    return stayUpVal ? internalrVs.stayupHelpsPaper : false;
+  };
+
+  // agent involves embedded inference
+  var agentERP = Enumerate(function() {
+    var stayUp = stayUpPrior();
+    var imaginedRVs = rand();
+    var finishPaper = resultOfAction(stayUp, imaginedRVs);
+      condition( wantFinish ? finishPaper : true );
+      return stayUp;
+  });
+
+  var probAct = Math.exp(agentERP.score([], true));
+  var stayUpActual = probAct >= actualRVs.action;
+
+  var finishPaper = resultOfAction(stayUpActual, actualRVs);
+
+  return {
+    wantFinish: wantFinish,
+    stayUp: stayUpActual,
+    finishPaper: finishPaper
+  }
+});
+
+// ======== parameters and counterfactual functions =========
+
+// parameter for how similar counterfactual world is to actual world
+var stickiness = 0.5;
+
+var stickyRand = function(actualRVs) {
+  var freshRVs = rand();
+  return mapObject(function(key, val) {
+    return flip(stickiness) ? actualRVs[key] : freshRVs[key];
+  }, actualRVs);
+};
+
+var checkPossible = function(unfactoredERP) {
+  var factorERP = Enumerate(function() {
+    return sample(unfactoredERP).factor;
+  });
+  if (factorERP.score([], -Infinity) == 0) {
+    // a sort of way of throwing errors if we try to evaluate an impossible utterance
+    return 'impossible';
+  } else {
+    return Enumerate(function() {
+      var result = sample(unfactoredERP);
+      factor(result.factor);
+      return result.result;
+    });
+  }
+};
+
+var counterfactualERP = function(ifA, thenB, actualRVs) {
+  var unfactoredERP = Enumerate(function() {
+    var counterfactualRVs = stickyRand(actualRVs);
+    var counterfactualWorld = vars(counterfactualRVs);
+    return {
+      result: contextualEval(thenB, counterfactualWorld),
+      factor: (contextualEval(ifA, counterfactualWorld) ? 0 : -Infinity)
+    }
+  });
+  return checkPossible(unfactoredERP);
+};
+
+// ======== literal meaning functions =========
+
+var because = function(conditionA, resultB, actualWorld, actualRVs) {
+  var actuallyA = contextualEval(conditionA, actualWorld);
+  var actuallyB = contextualEval(resultB, actualWorld);
+
+  // //// without "presuppositions"
+  // var ifNotA = "!" + conditionA;
+  // var thenNotB = "!" + resultB;
+  // var cfERP = counterfactualERP(ifNotA, thenNotB, actualRVs, model, params);
+  // return cfERP == 'impossible' ? -Infinity : cfERP.score([], true);
+
+  //// with "presuppositions"
+  if (actuallyA & actuallyB) {;
+
+    var ifNotA = "!(" + conditionA + ")";
+    var thenNotB = "!(" + resultB + ")";
+
+    var cfERP = counterfactualERP(ifNotA, thenNotB, actualRVs);
+
+    return cfERP == 'impossible' ? -Infinity : cfERP.score([], true);;
+  } else {
+    return -Infinity;
+  }
+};
+
+/*
+   meaning_factor is -Infinity if the utterance is completely false
+   in the world, 0 if the utterance is true, and for "because" utterances
+   it is the proportion of counterfactual worlds satisfying conditionA
+   in which resultB is also true.
+*/
+
+var meaning_factor = cache(function(utterance, world, rVs) {
+  if (utterance == 'nothing') {
+    return 0;
+  } else {
+    var words = utterance.split(' ');
+    var negation = words[0] == "itisnotthecasethat";
+    var doubleNegation = negation ? words[1] == "itisnotthecasethat" : false;
+    var restOfWords = doubleNegation ? words.slice(2) : negation ? words.slice(1) : words;
+    if (restOfWords.length < 2 | restOfWords[1] != 'because') {
+      var isTrue = contextualEval(restOfWords.join(' '), world);
+      // if negation, check that negated utterance is true
+      return (doubleNegation ? isTrue : negation ? !isTrue : isTrue) ? 0 : -Infinity;
+    } else {
+      // "resultB because conditionA"
+      var resultB = restOfWords[0];
+      var conditionA = restOfWords[2];
+
+      var becauseIsTrue = because(conditionA, resultB, world, rVs);
+
+      return doubleNegation ? becauseIsTrue : negation ? !becauseIsTrue : becauseIsTrue;
+    }
+  }
+});
+
+var literalERP = cache(function(utterance) {
+  var unfactoredERP = Enumerate(function() {
+    var actualRVs = rand();
+    var actualWorld = vars(actualRVs);
+    return {
+      result: actualWorld,
+      factor: meaning_factor(utterance, actualWorld, actualRVs) +
+        meaning_factor('stayUp', actualWorld)
+        // presuppose that bob stayed up
+    };
+  });
+  return checkPossible(unfactoredERP);
+});
+
+var alpha = 5;
+
+var getCostUtterance = function(utterance) {
+  if (utterance == "nothing") {
+    return 0;
+  } else {
+    var words = utterance.split(" ");
+    var chars = utterance.split("");
+    var negs = filter(function(x) {return x == "!";}, chars);
+    return words.length;
+  }
+};
+
+var baseUtterances = [
+  'stayUp because wantFinish',
+  'stayUp because !wantFinish',
+  'stayUp because stayUp',
+  'stayUp because finishPaper',
+  'stayUp because !finishPaper'
+];
+
+var getUtterancePrior = function(utterance) {
+  var getAlternativeUtterances = function(utterance) {
+    return [utterance, "nothing", "itisnotthecasethat " + utterance].concat(
+      baseUtterances
+    );
+  };
+  var utterances = getAlternativeUtterances(utterance);
+  var costs = map(getCostUtterance, utterances);
+  return function() {
+    var probabilities = map(function(x) {return Math.exp(-x);}, costs);
+    return utterances[discrete(probabilities)];
+  };
+};
+
+var speakerERP = cache(function(world, baseUtterance) {
+  var utterancePrior = getUtterancePrior(baseUtterance);
+  var unfactoredERP = Enumerate(function() {
+    var utterance = utterancePrior();
+    var interpretation = literalERP(utterance);
+    return {
+      factor: interpretation == 'impossible' ? -Infinity : interpretation.score([], world),
+      result: utterance
+    };
+  });
+  return checkPossible(unfactoredERP);
+});
+
+var listenerERP = cache(function(utterance) {
+  return Enumerate(function() {
+    var actualRVs = rand();
+    var actualWorld = vars(actualRVs);
+    //print(actualWorld);
+    var description = speakerERP(actualWorld, utterance /*give speaker utterance to generate relevant alternatives*/);
+    factor(
+      (description == 'impossible' ? -Infinity : description.score([], utterance) * alpha)  +
+        meaning_factor('stayUp', actualWorld)
+        // presuppose that bob stayed up
+    );
+    return actualWorld;
+  });
+});
+
+var speaker2ERP = function(utterance, world) {
+  var s2Utterances = [utterance, "itisnotthecasethat " + utterance];
+  var s2costs = map(getCostUtterance, s2Utterances);
+  var s2UtterancePrior = function() {
+    var probabilities = map(function(x) {return Math.exp(-x);}, s2costs);
+    return s2Utterances[discrete(probabilities)];
+  };
+  return Enumerate(function() {
+    var utt = s2UtterancePrior();
+    var interpretation = listenerERP(utt);
+    factor( interpretation.score([], world) );
+    return utt==utterance ? 'yes' : 'no';
+  });
+};
+
+// // ======== examples =========
+
+// vizPrint(speakerERP(
+//   {stayUp: true, wantFinish: true, finishPaper: true},
+//   'stayUp because wantFinish')
+// );
+
+// vizPrint(Enumerate(function() {
+//   var rVs = rand();
+//   return vars(rVs);
+// }));
+
+// vizPrint(literalERP('stayUp because wantFinish'));
+// print(literalERP('stayUp because !wantFinish'));
+// vizPrint(literalERP('stayUp because finishPaper'));
+// print(literalERP('stayUp because !finishPaper'));
+// vizPrint(literalERP('stayUp because stayUp'));
+// vizPrint(literalERP('nothing'));
+
+// vizPrint(listenerERP('stayUp because wantFinish'));
+
+print('print("stayUp because wantFinish")');
+vizPrint(speaker2ERP(
+  'stayUp because wantFinish',
+  {"wantFinish":true,"stayUp":true,"finishPaper":true}
+));
+
+print('print("stayUp because finishPaper")');
+vizPrint(speaker2ERP(
+  'stayUp because finishPaper',
+  {"wantFinish":true,"stayUp":true,"finishPaper":true}
+));
+
+print('print("stayUp because stayUp")');
+vizPrint(speaker2ERP(
+  'stayUp because stayUp',
+  {"wantFinish":true,"stayUp":true,"finishPaper":true}
+));
+
+"finished"
