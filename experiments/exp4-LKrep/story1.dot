@@ -1,0 +1,8 @@
+digraph G {
+  uA [shape=box,label="uA (0.1)"];
+  uB [shape=box,label="uB (0.1)"];
+  uA -> A;
+  A [style=filled,color=green];
+  uB -> B;
+  B [style=filled,color=green];
+}

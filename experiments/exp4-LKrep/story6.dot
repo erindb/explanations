@@ -1,0 +1,13 @@
+digraph G {
+  uA [shape=box,label="uA (0.25)"];
+  uAB [shape=box,label="uAB (0.9)"];
+  uBC [shape=box,label="uBC (0.9)"];
+  uA -> A;
+  A [style=filled,color=red];
+  uAB -> B;
+  B [style=filled,color=red];
+  uBC -> C;
+  C [style=filled,color=green];
+  A->B [label="xnor"];
+  B->C [label="xnor"];
+}

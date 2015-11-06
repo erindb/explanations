@@ -38,16 +38,17 @@ var contextualEval = cache(function(proposition, world) {
 var rand = function() {
   return {
     wantFinish: flip(0.5),
-    action: uniformDraw([0.2, 0.4, 0.6, 0.8]),
-    stayupHelpsPaper: flip(0.9)
+    action: uniformDraw([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]),
+    stayupHelpsPaper: flip(0.9),
+    paperIfNotStayUp: flip(0.1)
   };
 };
 
 var vars = cache(function(actualRVs) {
   var wantFinish = actualRVs.wantFinish;
-  var stayUpPrior = function() { return flip(0.1); };
+  var stayUpPrior = function() { return flip(0.2); };
   var resultOfAction = function(stayUpVal, internalrVs) {
-    return stayUpVal ? internalrVs.stayupHelpsPaper : false;
+    return stayUpVal ? internalrVs.stayupHelpsPaper : internalrVs.paperIfNotStayUp;
   };
 
   // agent involves embedded inference
@@ -55,8 +56,8 @@ var vars = cache(function(actualRVs) {
     var stayUp = stayUpPrior();
     var imaginedRVs = rand();
     var finishPaper = resultOfAction(stayUp, imaginedRVs);
-      condition( wantFinish ? finishPaper : true );
-      return stayUp;
+    condition( wantFinish ? finishPaper : true );
+    return stayUp;
   });
 
   var probAct = Math.exp(agentERP.score([], true));
@@ -144,38 +145,41 @@ var because = function(conditionA, resultB, actualWorld, actualRVs) {
    in which resultB is also true.
 */
 
+/*
+   meaning_factor is -Infinity if the utterance is completely false
+   in the world, 0 if the utterance is true, and for "because" utterances
+   it is the proportion of counterfactual worlds satisfying conditionA
+   in which resultB is also true.
+*/
 var meaning_factor = cache(function(utterance, world, rVs) {
   if (utterance == 'nothing') {
-    return 0;
+    return 0; // saying nothing doesn't update prior beliefs
   } else {
     var words = utterance.split(' ');
-    var negation = words[0] == "itisnotthecasethat";
-    var doubleNegation = negation ? words[1] == "itisnotthecasethat" : false;
-    var restOfWords = doubleNegation ? words.slice(2) : negation ? words.slice(1) : words;
-    if (restOfWords.length < 2 | restOfWords[1] != 'because') {
-      var isTrue = contextualEval(restOfWords.join(' '), world);
-      // if negation, check that negated utterance is true
-      return (doubleNegation ? isTrue : negation ? !isTrue : isTrue) ? 0 : -Infinity;
+
+    // if the utterance doesn't have "because" in it, just evaluate it in the world
+    if (words.length < 2 | words[1] != 'because') {
+      var isTrue = contextualEval(words.join(' '), world);
+      return (isTrue ? 0 : -Infinity);
     } else {
       // "resultB because conditionA"
-      var resultB = restOfWords[0];
-      var conditionA = restOfWords[2];
+      var resultB = words[0];
+      var conditionA = words[2];
 
-      var becauseIsTrue = because(conditionA, resultB, world, rVs);
-
-      return doubleNegation ? becauseIsTrue : negation ? !becauseIsTrue : becauseIsTrue;
+      var becauseFactor = because(conditionA, resultB, world, rVs);
+      return becauseFactor;
     }
   }
 });
 
-var literalERP = cache(function(utterance) {
+var literalERP = cache(function(utterance, presup) {
   var unfactoredERP = Enumerate(function() {
     var actualRVs = rand();
     var actualWorld = vars(actualRVs);
     return {
       result: actualWorld,
       factor: meaning_factor(utterance, actualWorld, actualRVs) +
-        meaning_factor('stayUp', actualWorld)
+        meaning_factor(presup, actualWorld)
         // presuppose that bob stayed up
     };
   });
@@ -205,7 +209,7 @@ var baseUtterances = [
 
 var getUtterancePrior = function(utterance) {
   var getAlternativeUtterances = function(utterance) {
-    return [utterance, "nothing", "itisnotthecasethat " + utterance].concat(
+    return [utterance, "nothing"].concat(
       baseUtterances
     );
   };
@@ -217,11 +221,11 @@ var getUtterancePrior = function(utterance) {
   };
 };
 
-var speakerERP = cache(function(world, baseUtterance) {
+var speakerERP = cache(function(world, baseUtterance, presup) {
   var utterancePrior = getUtterancePrior(baseUtterance);
   var unfactoredERP = Enumerate(function() {
     var utterance = utterancePrior();
-    var interpretation = literalERP(utterance);
+    var interpretation = literalERP(utterance, presup);
     return {
       factor: interpretation == 'impossible' ? -Infinity : interpretation.score([], world),
       result: utterance
@@ -230,32 +234,26 @@ var speakerERP = cache(function(world, baseUtterance) {
   return checkPossible(unfactoredERP);
 });
 
-var listenerERP = cache(function(utterance) {
-  return Enumerate(function() {
+var listenerERP = cache(function(utterance, presup) {
+  var unfactoredERP = Enumerate(function() {
     var actualRVs = rand();
     var actualWorld = vars(actualRVs);
     //print(actualWorld);
-    var description = speakerERP(actualWorld, utterance /*give speaker utterance to generate relevant alternatives*/);
-    factor(
-      (description == 'impossible' ? -Infinity : description.score([], utterance) * alpha)  +
-        meaning_factor('stayUp', actualWorld)
-        // presuppose that bob stayed up
-    );
-    return actualWorld;
+    var description = speakerERP(actualWorld, utterance, presup /*give speaker utterance to generate relevant alternatives*/);
+    return {
+      factor: (description == 'impossible' ? -Infinity : description.score([], utterance) * alpha),
+      result: actualWorld
+    };
   });
+  return checkPossible(unfactoredERP);
 });
 
-var speaker2ERP = function(utterance, world) {
-  var s2Utterances = [utterance, "itisnotthecasethat " + utterance];
-  var s2costs = map(getCostUtterance, s2Utterances);
-  var s2UtterancePrior = function() {
-    var probabilities = map(function(x) {return Math.exp(-x);}, s2costs);
-    return s2Utterances[discrete(probabilities)];
-  };
+var speaker2ERP = function(utterance, world, presup) {
+  var s2Utterances = [utterance, 'nothing'];
   return Enumerate(function() {
-    var utt = s2UtterancePrior();
-    var interpretation = listenerERP(utt);
-    factor( interpretation.score([], world) );
+    var utt = uniformDraw(s2Utterances);
+    var interpretation = listenerERP(utt, presup);
+    factor( interpretation == 'impossible' ? -Infinity : interpretation.score([], world) );
     return utt==utterance ? 'yes' : 'no';
   });
 };
@@ -269,7 +267,9 @@ var speaker2ERP = function(utterance, world) {
 
 // vizPrint(Enumerate(function() {
 //   var rVs = rand();
-//   return vars(rVs);
+//   var world = vars(rVs);
+//   condition(world.wantFinish);
+//   return world;
 // }));
 
 // vizPrint(literalERP('stayUp because wantFinish'));
@@ -281,22 +281,80 @@ var speaker2ERP = function(utterance, world) {
 
 // vizPrint(listenerERP('stayUp because wantFinish'));
 
-print('print("stayUp because wantFinish")');
-vizPrint(speaker2ERP(
-  'stayUp because wantFinish',
-  {"wantFinish":true,"stayUp":true,"finishPaper":true}
-));
+print('ttt,wantFinish,' + 
+  Math.exp(speaker2ERP(
+    'stayUp because wantFinish',
+    {"wantFinish":true,"stayUp":true,"finishPaper":true},
+    'stayUp'
+  ).score([], 'yes')));
+print('ttt,finishPaper,' + 
+  Math.exp(speaker2ERP(
+    'stayUp because finishPaper',
+    {"wantFinish":true,"stayUp":true,"finishPaper":true},
+    'stayUp'
+  ).score([], 'yes')));
+print('ttt,stayUp,' + 
+  Math.exp(speaker2ERP(
+    'stayUp because stayUp',
+    {"wantFinish":true,"stayUp":true,"finishPaper":true},
+    'stayUp'
+  ).score([], 'yes')));
 
-print('print("stayUp because finishPaper")');
-vizPrint(speaker2ERP(
-  'stayUp because finishPaper',
-  {"wantFinish":true,"stayUp":true,"finishPaper":true}
-));
+print('ttf,wantFinish,' + 
+  Math.exp(speaker2ERP(
+    'stayUp because wantFinish',
+    {"wantFinish":true,"stayUp":true,"finishPaper":false},
+    'stayUp'
+  ).score([], 'yes')));
+print('ttf,!finishPaper,' + 
+  Math.exp(speaker2ERP(
+    'stayUp because !finishPaper',
+    {"wantFinish":true,"stayUp":true,"finishPaper":false},
+    'stayUp'
+  ).score([], 'yes')));
+print('ttf,stayUp,' + 
+  Math.exp(speaker2ERP(
+    'stayUp because stayUp',
+    {"wantFinish":true,"stayUp":true,"finishPaper":false},
+    'stayUp'
+  ).score([], 'yes')));
 
-print('print("stayUp because stayUp")');
-vizPrint(speaker2ERP(
-  'stayUp because stayUp',
-  {"wantFinish":true,"stayUp":true,"finishPaper":true}
-));
+print('ftt,!wantFinish,' + 
+  Math.exp(speaker2ERP(
+    'stayUp because !wantFinish',
+    {"wantFinish":false,"stayUp":true,"finishPaper":true},
+    'stayUp'
+  ).score([], 'yes')));
+print('ftt,finishPaper,' + 
+  Math.exp(speaker2ERP(
+    'stayUp because finishPaper',
+    {"wantFinish":false,"stayUp":true,"finishPaper":true},
+    'stayUp'
+  ).score([], 'yes')));
+print('ftt,stayUp,' + 
+  Math.exp(speaker2ERP(
+    'stayUp because stayUp',
+    {"wantFinish":false,"stayUp":true,"finishPaper":true},
+    'stayUp'
+  ).score([], 'yes')));
+
+print('ftf,!wantFinish,' + 
+  Math.exp(speaker2ERP(
+    'stayUp because !wantFinish',
+    {"wantFinish":false,"stayUp":true,"finishPaper":false},
+    'stayUp'
+  ).score([], 'yes')));
+print('ftf,!finishPaper,' + 
+  Math.exp(speaker2ERP(
+    'stayUp because !finishPaper',
+    {"wantFinish":false,"stayUp":true,"finishPaper":false},
+    'stayUp'
+  ).score([], 'yes')));
+print('ftf,stayUp,' + 
+  Math.exp(speaker2ERP(
+    'stayUp because stayUp',
+    {"wantFinish":false,"stayUp":true,"finishPaper":false},
+    'stayUp'
+  ).score([], 'yes')));
 
 "finished"

@@ -1,0 +1,15 @@
+digraph G {
+  uA [shape=box,label="uA (0.75)"];
+  uB [shape=box,label="uB (0.75)"];
+  uBC [shape=box,label="uBC (0.9)"];
+  uA -> A;
+  uB -> B;
+  A [style=filled,color=green];
+  B [style=filled,color=green];
+  C [style=filled,color=green];
+  D [style=filled,color=green];
+  A -> C;
+  B -> C [label="A or (B & uBC)"];
+  uBC -> C;
+  C -> D;
+}
