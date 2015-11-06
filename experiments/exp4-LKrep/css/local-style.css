@@ -15,10 +15,6 @@
 	margin: 20 auto 20 auto;
 }
 
-.progress {
-	display: none;
-}
-
 .story, .story_intro {
     text-align: left;
     width: 700px;

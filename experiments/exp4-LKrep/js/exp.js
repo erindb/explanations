@@ -308,6 +308,7 @@ function make_slides(f) {
       var lab = labs[story_index];
       $(".lab").html(lab);
       $(".present_stuff").hide();
+      $(".continue").show();
       var story_intro = "The " + lab + " Lab is studying hormones in mice. " +
                         they_found(n_hormones) + "<br/>";
       $(".story_intro").html(story_intro);
@@ -322,6 +323,8 @@ function make_slides(f) {
       if (!this.just_beginning) {
         $(".err").hide();
         $(".present_stuff").show();
+        $(".answers").show();
+        $(".continue").show();
 
         var story_index = stim.story_index;
         var lab = labs[story_index];
@@ -357,10 +360,13 @@ function make_slides(f) {
           $(".err").show();
         } else {
           this.log_responses();
-
+          $(".answers").hide();
+          $(".continue").hide();
           /* use _stream.apply(this); if and only if there is
           "present" data. (and only *after* responses are logged) */
-          _stream.apply(this);
+          setTimeout(function() {
+            _stream.apply(_s);
+          }, 1000);
         }
       }
     },
@@ -491,7 +497,7 @@ function init() {
   //make corresponding slides:
   exp.slides = make_slides(exp);
 
-  exp.nQs = utils.get_exp_length(); //this does not work if there are stacks of stims (but does work for an experiment with this structure)
+  exp.nQs = 19 + 1 + 1 + 2 +5; //utils.get_exp_length(); //this does not work if there are stacks of stims (but does work for an experiment with this structure)
                     //relies on structure and slides being defined
 
   $('.slide').hide(); //hide everything
