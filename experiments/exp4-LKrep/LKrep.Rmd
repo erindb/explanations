@@ -755,7 +755,6 @@ data.frame(
 
 ## ToDo
 
-1. write down causal models and questions
 2. code up experiment and run
 3. get model predictions
 4. compare ppl to model & replication to L&K

@@ -467,7 +467,7 @@ function make_slides(f) {
 function init() {
   repeatWorker = false;
   (function(){
-      var ut_id = "explanations-exp3-coffee-sunday-paper";
+      var ut_id = "explanations-exp4-lk-rep-counterfactuals";
       if (UTWorkerLimitReached(ut_id)) {
         $('.slide').empty();
         repeatWorker = true;
