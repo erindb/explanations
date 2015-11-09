@@ -360,7 +360,7 @@ They found two hormones in their rats and called them hormone A and hormone B.
 #### L&K original findings
 
 ```{r lk1, echo=F, fig.width=5, fig.height=3}
-data.frame(
+lk1 = data.frame(
   story = c('story1', 'story1'),
   labN.before.exclusion = 55,
   labN = 30,
@@ -372,13 +372,14 @@ data.frame(
   data_sd = c(0, 0.31), #participants were excluded if they said anything other than 0.
   model_response = frompixel(response.pixels=c(449, 254), pixel0=449, pixel1=112),
   model_sd = c(0, 0)
-) %>% graph(.)
+)
+graph(lk1)
 ```
 
 #### Replication results
 
 ```{r rep1, echo=F, fig.width=5, fig.height=3}
-cfs %>% filter(story=='story1') %>%
+rep1 = cfs %>% filter(story=='story1') %>%
   group_by(condition, variable) %>%
   summarise(data_response = mean(probability),
             story = story[1],
@@ -391,7 +392,8 @@ cfs %>% filter(story=='story1') %>%
             model_sd = 0) %>%
   select(story, labN.before.exclusion, labN, turkN.before.exclusion,turkN,
          condition, variable, data_response, data_sd, model_response,model_sd) %>%
-  as.data.frame %>% mutate(model_response=c(0, 0.5499999999999999)) %>% graph(.)
+  as.data.frame %>% mutate(model_response=c(0, 0.5499999999999999))
+graph(rep1)
 ```
 
 #### "Replication" with explanations
@@ -448,7 +450,7 @@ They found three hormones in their rats and called them hormone A, hormone B, an
 #### L&K original findings
 
 ```{r lk2, echo=F, fig.width=5, fig.height=3}
-data.frame(
+lk2 = data.frame(
   story = c('story2', 'story2', 'story2'),
   labN.before.exclusion = 55,
   labN = 30,
@@ -460,13 +462,14 @@ data.frame(
   data_sd = c(0), #participants were excluded if they said anything other than 0.
   model_response = frompixel(response.pixels=c(364, 410, 410), pixel0=410, pixel1=74),
   model_sd = c(0)
-) %>% graph(.)
+)
+graph(lk2)
 ```
 
 #### Replication results
 
 ```{r rep2, echo=F, fig.width=5, fig.height=3}
-cfs %>% filter(story=='story2') %>%
+rep2 = cfs %>% filter(story=='story2') %>%
   group_by(condition, variable) %>%
   summarise(data_response = mean(probability),
             story = story[1],
@@ -480,7 +483,8 @@ cfs %>% filter(story=='story2') %>%
   select(story, labN.before.exclusion, labN, turkN.before.exclusion,turkN,
          condition, variable, data_response, data_sd, model_response,model_sd) %>%
   as.data.frame %>%
-  mutate(model_response = c(0.13253012048192778, 0, 0)) %>% graph(.)
+  mutate(model_response = c(0.13253012048192778, 0, 0))
+graph(rep2)
 ```
 
 #### "Replication" with explanations
@@ -569,7 +573,7 @@ cfs %>% filter(story=='story2') %>%
 #### L&K original findings
 
 ```{r lk3, echo=F, fig.width=5, fig.height=3}
-data.frame(
+lk3 = data.frame(
   story = c('story3a', 'story3a', 'story3b', 'story3b', 'story3b'),
   labN.before.exclusion = 55,
   labN = 30,
@@ -581,13 +585,14 @@ data.frame(
   data_sd = c(0), #participants were excluded if they said anything other than 0.
   model_response = frompixel(response.pixels=c(435, 240, 435, 240, 240), pixel0=435, pixel1=99),
   model_sd = c(0)
-) %>% graph(.)
+)
+graph(lk3)
 ```
 
 #### Replication results
 
 ```{r rep3, echo=F, fig.width=5, fig.height=3}
-cfs %>% filter(story=='story3a' | story=='story3b') %>%
+rep3 = cfs %>% filter(story=='story3a' | story=='story3b') %>%
   group_by(condition, variable, story) %>%
   summarise(data_response = mean(probability),
             labN.before.exclusion=0,
@@ -600,7 +605,8 @@ cfs %>% filter(story=='story3a' | story=='story3b') %>%
   select(story, labN.before.exclusion, labN, turkN.before.exclusion,turkN,
          condition, variable, data_response, data_sd, model_response,model_sd) %>%
   as.data.frame %>%
-  mutate(model_response = c(0, 0, 0.5499999999999999, 0.5499999999999999, 0.5499999999999999)) %>% graph(.)
+  mutate(model_response = c(0, 0, 0.5499999999999999, 0.5499999999999999, 0.5499999999999999)) 
+graph(rep3)
 ```
 
 #### "Replication" with explanations
@@ -680,7 +686,7 @@ They found four hormones in their rats and called them hormone A, hormone B, hor
 #### L&K original findings
 
 ```{r echo=F, fig.width=5, fig.height=3}
-data.frame(
+lk4 = data.frame(
   story = c('story4', 'story4', 'story4', 'story4'),
   labN.before.exclusion = 55,
   labN = 30,
@@ -692,13 +698,14 @@ data.frame(
   data_sd = c(0), #participants were excluded if they said anything other than 0.
   model_response = frompixel(response.pixels=c(228, 228, 105, 105), pixel0=441, pixel1=105),
   model_sd = c(0)
-) %>% graph(.)
+)
+graph(lk4)
 ```
 
 #### Replication results
 
 ```{r rep4, echo=F, fig.width=5, fig.height=3}
-cfs %>% filter(story=='story4') %>%
+rep4 = cfs %>% filter(story=='story4') %>%
   group_by(condition, variable) %>%
   summarise(data_response = mean(probability),
             story = story[1],
@@ -712,7 +719,8 @@ cfs %>% filter(story=='story4') %>%
   select(story, labN.before.exclusion, labN, turkN.before.exclusion,turkN,
          condition, variable, data_response, data_sd, model_response,model_sd) %>%
   as.data.frame %>%
-  mutate(model_response = c(0.6451612903225805, 0.6451612903225805, 1, 1)) %>% graph(.)
+  mutate(model_response = c(0.6451612903225805, 0.6451612903225805, 1, 1))
+graph(rep4)
 ```
 
 #### "Replication" with explanations
@@ -791,25 +799,26 @@ They found three hormones in their rats and called them hormone A, hormone B, an
 #### L&K original findings
 
 ```{r echo=F, fig.width=5, fig.height=3}
-data.frame(
+lk5 = data.frame(
   story = c('story5', 'story5', 'story5', 'story5'),
   labN.before.exclusion = 55,
   labN = 30,
   turkN.before.exclusion = 56,
   turkN = 34,
-  condition = c('C=T', 'C=T', 'C=T', 'C=T'),
+  condition = c('C=F', 'C=F', 'C=F', 'C=F'),
   variable = c('A', 'B', 'C', 'D'),
   data_response = frompixel(response.pixels=c(372, 305, 440, 373), pixel0=450, pixel1=114),
   data_sd = c(0), #participants were excluded if they said anything other than 0.
   model_response = frompixel(response.pixels=c(450, 305, 450, 450), pixel0=450, pixel1=114),
   model_sd = c(0)
-) %>% graph(.)
+)
+graph(lk5)
 ```
 
 #### Replication results
 
 ```{r rep5, echo=F, fig.width=5, fig.height=3}
-cfs %>% filter(story=='story5') %>%
+rep5 = cfs %>% filter(story=='story5') %>%
   group_by(condition, variable) %>%
   summarise(data_response = mean(probability),
             story = story[1],
@@ -823,7 +832,8 @@ cfs %>% filter(story=='story5') %>%
   select(story, labN.before.exclusion, labN, turkN.before.exclusion,turkN,
          condition, variable, data_response, data_sd, model_response,model_sd) %>%
   as.data.frame %>%
-  mutate(model_response = c(0, 0.2592592592592591, 0, 0)) %>% graph(.)
+  mutate(model_response = c(0, 0.2592592592592591, 0, 0))
+graph(rep5)
 ```
 
 #### "Replication" with explanations
@@ -897,7 +907,7 @@ be absent. In the remaining mice, if B is present, this causes C to be absent, a
 #### L&K original findings
 
 ```{r echo=F, fig.width=5, fig.height=3}
-data.frame(
+lk6 = data.frame(
   story = c('story6', 'story6', 'story6'),
   labN.before.exclusion = 55,
   labN = 30,
@@ -909,13 +919,14 @@ data.frame(
   data_sd = c(0), #participants were excluded if they said anything other than 0.
   model_response = frompixel(response.pixels=c(206, 114, 309), pixel0=450, pixel1=114),
   model_sd = c(0)
-) %>% graph(.)
+)
+graph(lk6)
 ```
 
 #### Replication results
 
 ```{r rep6, echo=F, fig.width=5, fig.height=3}
-cfs %>% filter(story=='story6') %>%
+rep6 = cfs %>% filter(story=='story6') %>%
   group_by(condition, variable) %>%
   summarise(data_response = mean(probability),
             story = story[1],
@@ -929,7 +940,8 @@ cfs %>% filter(story=='story6') %>%
   select(story, labN.before.exclusion, labN, turkN.before.exclusion,turkN,
          condition, variable, data_response, data_sd, model_response,model_sd) %>%
   as.data.frame %>%
-  mutate(model_response = c(0.7307692307692304, 1, 0.4500000000000002)) %>% graph(.)
+  mutate(model_response = c(0.7307692307692304, 1, 0.4500000000000002))
+graph(rep6)
 ```
 
 #### "Replication" with explanations
@@ -952,6 +964,35 @@ cfs %>% filter(story=='story6') %>%
   <option value="B">B is not present</option>
   <option value="C">C is present</option>
 </select>.
+
+## Overall replication results (counterfactual)
+
+```{r}
+repN = length(unique(rep_counterfactuals_good_ss$workerid))
+lk = rbind(lk1, lk2, lk3, lk4, lk5, lk6) %>% mutate(version = 'original')
+rep = rbind(rep1, rep2, rep3, rep4, rep5, rep6) %>% mutate(version = 'replication')
+rbind(lk, rep) %>% gather('source', 'number', 8:11) %>%
+  mutate(source = as.character(source),
+         statistic = factor(sapply(source, function(str) {
+           return(strsplit(str, split='_')[[1]][2])
+           })),
+         source = factor(sapply(source, function(str) {
+           return(strsplit(str, split='_')[[1]][1])
+           }))) %>% 
+  spread(statistic, number) %>% select(story, condition, variable, source, response, version, sd) %>%
+  reshape(.,
+          timevar='version',
+          idvar=c('story', 'condition', 'variable', 'source'),
+          direction='wide') %>%
+  ggplot(., aes(x=response.original, y=response.replication, colour=story, shape=variable)) +
+  geom_point(size=3) +
+  geom_errorbar(aes(x=response.original, ymin=response.replication -2*sd.replication/sqrt(repN),
+                    ymax=response.replication + 2*sd.replication/sqrt(repN))) +
+  theme_few() +
+  geom_abline(intercept = 0, slope = 1, linetype='dotted') +
+  facet_wrap(~source) +
+  scale_colour_few()
+```
 
 ## Demographic information (counterfactual)
 

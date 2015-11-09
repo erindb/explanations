@@ -20,6 +20,18 @@ var vizPrint = function(erp) {
   print("vizPrint(Enumerate(function() {return s[discrete(p)];}))")
 };
 
+var worldstring = function(w) {
+  return (w.goal?'G':'-') + (w.action?'A':'-') + (w.outcome?'O':'-');
+};
+
+var strPrint = function(erp) {
+  var support = erp.support();
+  var probs = map(function(x) {return Math.exp(erp.score([], x));}, support);
+  print("var s = " + JSON.stringify(map(worldstring, support)) + ";");
+  print("var p = " + JSON.stringify(probs) + ";");
+  print("print(Enumerate(function() {return s[discrete(p)];}))")
+};
+
 // ======== other utilities =========
 
 var contextualEval = cache(function(proposition, world) {
@@ -35,41 +47,45 @@ var contextualEval = cache(function(proposition, world) {
 
 // ======== model specification =========
 
+// exogenous random variables
 var rand = function() {
   return {
-    wantFinish: flip(0.5),
-    action: uniformDraw([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]),
-    stayupHelpsPaper: flip(0.9),
-    paperIfNotStayUp: flip(0.1)
+    uG: flip(0.5), // p(goal)
+    uA: flip(0.3), // p(action | no goal)
+    uAX: flip(0.9), // p(X | action)
+    uX: flip(0.1), // background p(X | !action)
+    uR: uniformDraw([0.0, 0.333, 0.6666, 1.0])
+    //uR: uniformDraw(0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0);
   };
 };
 
-var vars = cache(function(actualRVs) {
-  var wantFinish = actualRVs.wantFinish;
-  var stayUpPrior = function() { return flip(0.2); };
-  var resultOfAction = function(stayUpVal, internalrVs) {
-    return stayUpVal ? internalrVs.stayupHelpsPaper : internalrVs.paperIfNotStayUp;
+// endogenous variables are functions of the random state
+var vars = cache(function(rVs) {
+
+  var outcomeFn = function(internalAction, internalRVs) {
+    //     if action,     then p(X | action). else p(X|!action)
+    return internalAction ? internalRVs.uAX : internalRVs.uX;
   };
 
-  // agent involves embedded inference
-  var agentERP = Enumerate(function() {
-    var stayUp = stayUpPrior();
+  var goal = rVs.uG;
+
+  var actionERP = Enumerate(function() {
     var imaginedRVs = rand();
-    var finishPaper = resultOfAction(stayUp, imaginedRVs);
-    condition( wantFinish ? finishPaper : true );
-    return stayUp;
+    var imaginedAction = imaginedRVs.uA; // imagine action based on priors
+    var imaginedOutcome = outcomeFn(imaginedAction, imaginedRVs);
+    condition( goal ? imaginedOutcome : true );
+    return imaginedAction;
   });
+  var probAction = Math.exp(actionERP.score([], true));
 
-  var probAct = Math.exp(agentERP.score([], true));
-  var stayUpActual = probAct >= actualRVs.action;
-
-  var finishPaper = resultOfAction(stayUpActual, actualRVs);
+  var action = rVs.uR <= probAction; // sample from actionERP using rVs.uR
+  var outcome = outcomeFn(action, rVs);
 
   return {
-    wantFinish: wantFinish,
-    stayUp: stayUpActual,
-    finishPaper: finishPaper
-  }
+    goal: goal,
+    action: action,
+    outcome: outcome
+  };
 });
 
 // ======== parameters and counterfactual functions =========
@@ -83,6 +99,17 @@ var stickyRand = function(actualRVs) {
     return flip(stickiness) ? actualRVs[key] : freshRVs[key];
   }, actualRVs);
 };
+
+var contextualEval = cache(function(proposition, world) {
+  var context = reduce(
+    function(keyVal, acc) {
+      return acc + ' var ' + keyVal[0] + ' = ' + JSON.stringify(keyVal[1]) + ';';
+    },
+    "",
+    _.pairs(world)
+  );
+  return webpplEval(context + proposition + ';');
+});
 
 var checkPossible = function(unfactoredERP) {
   var factorERP = Enumerate(function() {
@@ -109,6 +136,7 @@ var counterfactualERP = function(ifA, thenB, actualRVs) {
       factor: (contextualEval(ifA, counterfactualWorld) ? 0 : -Infinity)
     }
   });
+  // let the counterfactual return impossible if it is
   return checkPossible(unfactoredERP);
 };
 
@@ -118,15 +146,7 @@ var because = function(conditionA, resultB, actualWorld, actualRVs) {
   var actuallyA = contextualEval(conditionA, actualWorld);
   var actuallyB = contextualEval(resultB, actualWorld);
 
-  // //// without "presuppositions"
-  // var ifNotA = "!" + conditionA;
-  // var thenNotB = "!" + resultB;
-  // var cfERP = counterfactualERP(ifNotA, thenNotB, actualRVs, model, params);
-  // return cfERP == 'impossible' ? -Infinity : cfERP.score([], true);
-
-  //// with "presuppositions"
   if (actuallyA & actuallyB) {;
-
     var ifNotA = "!(" + conditionA + ")";
     var thenNotB = "!(" + resultB + ")";
 
@@ -137,13 +157,6 @@ var because = function(conditionA, resultB, actualWorld, actualRVs) {
     return -Infinity;
   }
 };
-
-/*
-   meaning_factor is -Infinity if the utterance is completely false
-   in the world, 0 if the utterance is true, and for "because" utterances
-   it is the proportion of counterfactual worlds satisfying conditionA
-   in which resultB is also true.
-*/
 
 /*
    meaning_factor is -Infinity if the utterance is completely false
@@ -177,17 +190,23 @@ var literalERP = cache(function(utterance, presup) {
     var actualRVs = rand();
     var actualWorld = vars(actualRVs);
     return {
-      result: actualWorld,
-      factor: meaning_factor(utterance, actualWorld, actualRVs) +
-        meaning_factor(presup, actualWorld)
-        // presuppose that bob stayed up
+      factor: meaning_factor(utterance, actualWorld, actualRVs) + meaning_factor(presup, actualWorld),
+      result: actualWorld
     };
   });
   return checkPossible(unfactoredERP);
 });
 
+var marginalize = function(erp, variable) {
+  return Enumerate(function() {
+    var res = sample(erp);
+    return res[variable];
+  });
+};
+
 var alpha = 5;
 
+// utility to get cost of utterance based on number of words
 var getCostUtterance = function(utterance) {
   if (utterance == "nothing") {
     return 0;
@@ -199,21 +218,45 @@ var getCostUtterance = function(utterance) {
   }
 };
 
-var baseUtterances = [
-  'stayUp because wantFinish',
-  'stayUp because !wantFinish',
-  'stayUp because stayUp',
-  'stayUp because finishPaper',
-  'stayUp because !finishPaper'
-];
+// utility to grab Booleans from world
+var basePropositions = function() {
+  var RVs = rand();
+  var world = vars(RVs);
+  return map(
+    function(keyVal) {
+      return keyVal[0];
+    },
+    filter(
+      function(keyVal) {
+        return typeof(keyVal[1]) == 'boolean';
+      },
+      _.pairs(world)
+    )
+  );
+}();
 
-var getUtterancePrior = function(utterance) {
-  var getAlternativeUtterances = function(utterance) {
-    return [utterance, "nothing"].concat(
-      baseUtterances
-    );
+var getUtterancePrior = function(baseUtterance) {
+  // alternatives are:
+  //   - nothing + all basic propositions and their negations for most things
+  //   - nothing + "B because " if the utterance is "B because X"
+  var getAlternativeUtterances = function(baseUtterance) {
+    // grab booleans and negate them to get all basic utterances and their negations
+    var negPropositions = map(function(p) {return "!" + p + "";}, basePropositions);
+    var simplePropositions = negPropositions.concat(basePropositions);
+    var words = baseUtterance.split(" ");
+
+    // if the utterance doesn't have "because" in it, all simple props and the utterance
+    if (words.length < 2 | words[1] != 'because') {
+      return ['nothing', baseUtterance].concat(simplePropositions);
+    } else {
+      // if utterance does have "because" in it, explain the consequence in some other way
+      var resultB = words[0];
+      return ['nothing'].concat(
+        map(function(simpleProp) {resultB + ' because ' + simpleProp}, simplePropositions)
+      );
+    }
   };
-  var utterances = getAlternativeUtterances(utterance);
+  var utterances = getAlternativeUtterances(baseUtterance);
   var costs = map(getCostUtterance, utterances);
   return function() {
     var probabilities = map(function(x) {return Math.exp(-x);}, costs);
@@ -221,8 +264,8 @@ var getUtterancePrior = function(utterance) {
   };
 };
 
-var speakerERP = cache(function(world, baseUtterance, presup) {
-  var utterancePrior = getUtterancePrior(baseUtterance);
+var speakerERP = cache(function(utterance, world, presup) {
+  var utterancePrior = getUtterancePrior(utterance);
   var unfactoredERP = Enumerate(function() {
     var utterance = utterancePrior();
     var interpretation = literalERP(utterance, presup);
@@ -238,123 +281,93 @@ var listenerERP = cache(function(utterance, presup) {
   var unfactoredERP = Enumerate(function() {
     var actualRVs = rand();
     var actualWorld = vars(actualRVs);
-    //print(actualWorld);
-    var description = speakerERP(actualWorld, utterance, presup /*give speaker utterance to generate relevant alternatives*/);
+    var description = speakerERP(utterance, actualWorld, presup);
     return {
-      factor: (description == 'impossible' ? -Infinity : description.score([], utterance) * alpha),
-      result: actualWorld
+      factor: (description == 'impossible' ? -Infinity : description.score([], utterance) * alpha) +
+              meaning_factor(presup, actualWorld),
+      result: worldstring(actualWorld)
+      // can presuppose stuff here, e.g. "B" in "why B?"
     };
   });
   return checkPossible(unfactoredERP);
 });
 
 var speaker2ERP = function(utterance, world, presup) {
-  var s2Utterances = [utterance, 'nothing'];
+  var utterances = [utterance, 'nothing'];
   return Enumerate(function() {
-    var utt = uniformDraw(s2Utterances);
+    var utt = uniformDraw(utterances);
     var interpretation = listenerERP(utt, presup);
-    factor( interpretation == 'impossible' ? -Infinity : interpretation.score([], world) );
-    return utt==utterance ? 'yes' : 'no';
+    var f = interpretation == 'impossible' ? -Infinity : interpretation.score([], world);
+    factor( f );
+    return utt == utterance ? 'yes' : 'no';
   });
 };
 
-// // ======== examples =========
+// ======== examples =========
 
-// vizPrint(speakerERP(
-//   {stayUp: true, wantFinish: true, finishPaper: true},
-//   'stayUp because wantFinish')
-// );
-
-// vizPrint(Enumerate(function() {
-//   var rVs = rand();
-//   var world = vars(rVs);
-//   condition(world.wantFinish);
-//   return world;
+// // check basic world
+// strPrint(Enumerate(function() {
+//   var actualRVs = rand();
+//   var actualWorld = vars(actualRVs);
+//   return actualWorld;
 // }));
 
-// vizPrint(literalERP('stayUp because wantFinish'));
-// print(literalERP('stayUp because !wantFinish'));
-// vizPrint(literalERP('stayUp because finishPaper'));
-// print(literalERP('stayUp because !finishPaper'));
-// vizPrint(literalERP('stayUp because stayUp'));
-// vizPrint(literalERP('nothing'));
+// // check setup matches numbers
+// printERP(marginalize(literalERP('true', 'true'), 'goal'));
+// printERP(marginalize(literalERP('goal', 'true'), 'action'));
+// printERP(marginalize(literalERP('!goal', 'true'), 'action'));
+// printERP(marginalize(literalERP('action', 'true'), 'outcome'));
+// printERP(marginalize(literalERP('!action', 'true'), 'outcome'));
 
-// vizPrint(listenerERP('stayUp because wantFinish'));
+// strPrint(literalERP('action because goal', 'true'));
+// strPrint(literalERP('nothing', 'true'));
 
-print('ttt,wantFinish,' + 
-  Math.exp(speaker2ERP(
-    'stayUp because wantFinish',
-    {"wantFinish":true,"stayUp":true,"finishPaper":true},
-    'stayUp'
-  ).score([], 'yes')));
-print('ttt,finishPaper,' + 
-  Math.exp(speaker2ERP(
-    'stayUp because finishPaper',
-    {"wantFinish":true,"stayUp":true,"finishPaper":true},
-    'stayUp'
-  ).score([], 'yes')));
-print('ttt,stayUp,' + 
-  Math.exp(speaker2ERP(
-    'stayUp because stayUp',
-    {"wantFinish":true,"stayUp":true,"finishPaper":true},
-    'stayUp'
-  ).score([], 'yes')));
+// strPrint(listenerERP('action because goal', 'true'));
+// strPrint(listenerERP('nothing', 'true'));
 
-print('ttf,wantFinish,' + 
-  Math.exp(speaker2ERP(
-    'stayUp because wantFinish',
-    {"wantFinish":true,"stayUp":true,"finishPaper":false},
-    'stayUp'
-  ).score([], 'yes')));
-print('ttf,!finishPaper,' + 
-  Math.exp(speaker2ERP(
-    'stayUp because !finishPaper',
-    {"wantFinish":true,"stayUp":true,"finishPaper":false},
-    'stayUp'
-  ).score([], 'yes')));
-print('ttf,stayUp,' + 
-  Math.exp(speaker2ERP(
-    'stayUp because stayUp',
-    {"wantFinish":true,"stayUp":true,"finishPaper":false},
-    'stayUp'
-  ).score([], 'yes')));
+// strPrint(literalERP('action because goal', 'true')); // good
+// strPrint(literalERP('action because outcome', 'true')); // ok
 
-print('ftt,!wantFinish,' + 
-  Math.exp(speaker2ERP(
-    'stayUp because !wantFinish',
-    {"wantFinish":false,"stayUp":true,"finishPaper":true},
-    'stayUp'
-  ).score([], 'yes')));
-print('ftt,finishPaper,' + 
-  Math.exp(speaker2ERP(
-    'stayUp because finishPaper',
-    {"wantFinish":false,"stayUp":true,"finishPaper":true},
-    'stayUp'
-  ).score([], 'yes')));
-print('ftt,stayUp,' + 
-  Math.exp(speaker2ERP(
-    'stayUp because stayUp',
-    {"wantFinish":false,"stayUp":true,"finishPaper":true},
-    'stayUp'
-  ).score([], 'yes')));
+// strPrint(literalERP('goal because action', 'true')); // bad-ish
+// strPrint(literalERP('outcome because action', 'true')); // good
 
-print('ftf,!wantFinish,' + 
-  Math.exp(speaker2ERP(
-    'stayUp because !wantFinish',
-    {"wantFinish":false,"stayUp":true,"finishPaper":false},
-    'stayUp'
-  ).score([], 'yes')));
-print('ftf,!finishPaper,' + 
-  Math.exp(speaker2ERP(
-    'stayUp because !finishPaper',
-    {"wantFinish":false,"stayUp":true,"finishPaper":false},
-    'stayUp'
-  ).score([], 'yes')));
-print('ftf,stayUp,' + 
-  Math.exp(speaker2ERP(
-    'stayUp because stayUp',
-    {"wantFinish":false,"stayUp":true,"finishPaper":false},
-    'stayUp'
-  ).score([], 'yes')));
+print('print("action because goal")');
+printERP(speaker2ERP(
+  'action because goal',
+  'GAO',
+  'true'
+));
+print('print("why aciton? action because goal")');
+printERP(speaker2ERP(
+  'action because goal',
+  'GAO',
+  'action'
+));
+
+print('print("action because outcome")');
+printERP(speaker2ERP(
+  'action because outcome',
+  'GAO',
+  'true'
+));
+print('print("why aciton? action because outcome")');
+printERP(speaker2ERP(
+  'action because outcome',
+  'GAO',
+  'outcome'
+));
+
+print('print("goal because action")');
+printERP(speaker2ERP(
+  'goal because action',
+  'GAO',
+  'true'
+));
+print('print("why goal? goal because action")');
+printERP(speaker2ERP(
+  'goal because action',
+  'GAO',
+  'goal'
+));
 
 "finished"

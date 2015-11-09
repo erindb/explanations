@@ -413,19 +413,19 @@ var story6 = {
   }
 }
 
-print("bacon, alpha=0.5")
-model(bacon.rand, bacon.vars, '!S', ['B'], {uB: true, uS: true, uN: true}, 0.5);
-print("story1, alpha=0.68")
-model(story1.rand, story1.vars, '!A', ['B'], {uA: true, uB: true}, 0.68);
-print("story2, alpha=0.68")
-model(story2.rand, story2.vars, '!B', ['A', 'B', 'C'], {uA: true, uAB: true, uBC: true}, 0.68);
-print("story3, alpha=0.68")
-model(story3.rand, story3.vars, '!A', ['A', 'B', 'C'], {uA: true, uB: true}, 0.68);
-print("story4, alpha=0.68")
-model(story4.rand, story4.vars, 'C', ['A', 'B', 'C', 'D'], {uA: false, uB: false}, 0.68);
+// print("bacon, alpha=0.5")
+// model(bacon.rand, bacon.vars, '!S', ['B'], {uB: true, uS: true, uN: true}, 0.5);
+// print("story1, alpha=0.68")
+// model(story1.rand, story1.vars, '!A', ['B'], {uA: true, uB: true}, 0.68);
+// print("story2, alpha=0.68")
+// model(story2.rand, story2.vars, '!B', ['A', 'B', 'C'], {uA: true, uAB: true, uBC: true}, 0.68);
+// print("story3, alpha=0.68")
+// model(story3.rand, story3.vars, '!A', ['A', 'B', 'C'], {uA: true, uB: true}, 0.68);
+// print("story4, alpha=0.68")
+// model(story4.rand, story4.vars, 'C', ['A', 'B', 'C', 'D'], {uA: false, uB: false}, 0.68);
 print("story5, alpha=0.68")
 model(story5.rand, story5.vars, '!C', ['A', 'B', 'C', 'D'], {uA: true, uB: true, uBC: true}, 0.68);
-print("story6, alpha=0.68")
-model(story6.rand, story6.vars, 'B', ['A', 'B', 'C'], {uA: false, uAB: false, uBC: true}, 0.68);
+// print("story6, alpha=0.68")
+// model(story6.rand, story6.vars, 'B', ['A', 'B', 'C'], {uA: false, uAB: false, uBC: true}, 0.68);
 
 "finished"
