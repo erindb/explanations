@@ -185,6 +185,100 @@ frompixel = function(response.pixels, pixel0, pixel1) {
 
 A replication of [Lucas & Kemp, 2015](http://philpapers.org/archive/LUCAIP.pdf), including additional conditions with explanations.
 
+```{r load replication data, echo=F}
+format_reward = function(reward) {
+  reward = reward[[1]]
+  reward = strsplit(reward, '')[[1]]
+  reward = paste(reward[2:length(reward)], collapse='')
+  return(reward)
+}
+get_probability = function(response, confidence) {
+  if (is.na(response)) {
+    return(NA)
+  } else {
+    if (response == 'no') {
+      return(0.5 - (confidence/2))
+    } else {
+      return(0.5 + (confidence/2))
+    }
+  }
+}
+parse_condition = function(condition, story) {
+  if (is.na(condition)) {
+    return(NA)
+  } else {
+    words = strsplit(condition, ' ')[[1]]
+    if (words[1] == 'you') {
+      variable = words[4]
+    } else {
+      variable = words[1]
+    }
+    if (story == 'story3a' & variable == 'B') {
+      variable == 'C'
+    }
+    state = words[length(words)]
+    if (state == 'present') {
+      return(paste(variable, '=T', sep=''))
+    } else {
+      return(paste(variable, '=F', sep=''))
+    }
+  }
+}
+get_variable = function(consequent, story) {
+  if (is.na(consequent)) {
+    return(NA)
+  } else{
+    variable = strsplit(consequent, ' ')[[1]][1]
+    if (story == 'story3a' & variable == 'B') {
+      variable = 'C'
+    }
+    return(variable)
+  }
+}
+rep_counterfactuals = do.call(rbind, lapply(1:3, function(i) {
+  return (read.csv(paste('../../data/exp4-lkrep/round', i, '/exp4.csv', sep='')) %>%
+            mutate(workerid = (workerid + (i-1)*9)))})) %>%
+  mutate(time_to_complete = Answer.time_in_minutes,
+         reward=as.numeric(sapply(as.character(reward), format_reward)),
+         trial_type=factor(ifelse(is.na(trial_type), 'counterfactual', 'probability')),
+         workerid=factor(workerid),
+         story_index = factor(story_index),
+         confused_by_attention_checks = comments == 3 | comments == 8,
+         probability = mapply(get_probability, response, confidence),
+         variable = as.character(mapply(get_variable, as.character(consequent), story)),
+         condition = as.character(mapply(parse_condition, as.character(condition), story))) %>%
+  select(
+    workerid, story_index, story, trial_type, confidence, consequent,
+    lab_name, mouse_name, phrase, response, condition, language,
+    enjoyment, gender, age, comments, assess, education, time_to_complete,
+    reward, confused_by_attention_checks, probability, variable)
+attention_check_fails = rep_counterfactuals %>%
+  filter((variable == 'A' & condition == 'A=F' & response == 'yes') |
+           (variable == 'B' & condition == 'B=T' & response == 'no') |
+           (variable == 'B' & condition == 'B=F' & response == 'yes') |
+           (variable == 'C' & condition == 'C=T' & response == 'no') |
+           (variable == 'C' & condition == 'C=F' & response == 'yes')) %>%
+  select(workerid, variable, condition, response, confused_by_attention_checks)
+exclude_if_1_wrong = F #if false, need two wrong to exclude
+if(exclude_if_1_wrong) {
+  workers_to_exclude = as.character(unique(attention_check_fails$workerid))
+} else {
+  workers_to_exclude = as.character(unique(attention_check_fails$workerid[
+    sapply(attention_check_fails$workerid, function(w) {
+      return(sum(attention_check_fails$workerid==w)>1)
+    })]))
+}
+rep_counterfactuals_good_ss = rep_counterfactuals %>% filter(!(workerid %in% workers_to_exclude))
+cfs = rep_counterfactuals_good_ss %>%
+  select(workerid, story, probability, variable, condition)
+probs = rep_counterfactuals_good_ss %>% filter(trial_type == 'probability') %>%
+  select(workerid, phrase, response)
+```
+
+## Model
+
+L&K used a simple grid search to find parameter values that minimized sum squared error. They considered considered 1000 uniformly spaced parameter values between 0 and 1. Best-fit parameter was s=0.68.
+
 ## Basic method
 
 #### First slide (my words):
@@ -265,7 +359,7 @@ They found two hormones in their rats and called them hormone A and hormone B.
 
 #### L&K original findings
 
-```{r echo=F, fig.width=5, fig.height=3}
+```{r lk1, echo=F, fig.width=5, fig.height=3}
 data.frame(
   story = c('story1', 'story1'),
   labN.before.exclusion = 55,
@@ -282,6 +376,23 @@ data.frame(
 ```
 
 #### Replication results
+
+```{r rep1, echo=F, fig.width=5, fig.height=3}
+cfs %>% filter(story=='story1') %>%
+  group_by(condition, variable) %>%
+  summarise(data_response = mean(probability),
+            story = story[1],
+            labN.before.exclusion=0,
+            labN=0,
+            turkN.before.exclusion=length(unique(rep_counterfactuals$workerid)),
+            turkN=length(unique(rep_counterfactuals_good_ss$workerid)),
+            data_sd = sd(probability),
+            model_response = NA,
+            model_sd = 0) %>%
+  select(story, labN.before.exclusion, labN, turkN.before.exclusion,turkN,
+         condition, variable, data_response, data_sd, model_response,model_sd) %>%
+  as.data.frame %>% mutate(model_response=c(0, 0.5499999999999999)) %>% graph(.)
+```
 
 #### "Replication" with explanations
 
@@ -336,7 +447,7 @@ They found three hormones in their rats and called them hormone A, hormone B, an
 
 #### L&K original findings
 
-```{r echo=F, fig.width=5, fig.height=3}
+```{r lk2, echo=F, fig.width=5, fig.height=3}
 data.frame(
   story = c('story2', 'story2', 'story2'),
   labN.before.exclusion = 55,
@@ -353,6 +464,26 @@ data.frame(
 ```
 
 #### Replication results
+
+```{r rep2, echo=F, fig.width=5, fig.height=3}
+cfs %>% filter(story=='story2') %>%
+  group_by(condition, variable) %>%
+  summarise(data_response = mean(probability),
+            story = story[1],
+            labN.before.exclusion=0,
+            labN=0,
+            turkN.before.exclusion=length(unique(rep_counterfactuals$workerid)),
+            turkN=length(unique(rep_counterfactuals_good_ss$workerid)),
+            data_sd = sd(probability),
+            model_response = NA,
+            model_sd = NA) %>%
+  select(story, labN.before.exclusion, labN, turkN.before.exclusion,turkN,
+         condition, variable, data_response, data_sd, model_response,model_sd) %>%
+  as.data.frame %>%
+  mutate(model_response = c(0.13253012048192778, 0, 0)) %>% graph(.)
+```
+
+#### "Replication" with explanations
 
 * For {{Frank}} the mouse, A is present because <select>
   <option value="nothing">none of these</option>
@@ -372,8 +503,6 @@ data.frame(
   <option value="B">B is present</option>
   <option value="C">C is present</option>
 </select>.
-
-#### "Replication" with explanations
 
 ### Story 3: simple
 
@@ -439,7 +568,7 @@ data.frame(
 
 #### L&K original findings
 
-```{r echo=F, fig.width=5, fig.height=3}
+```{r lk3, echo=F, fig.width=5, fig.height=3}
 data.frame(
   story = c('story3a', 'story3a', 'story3b', 'story3b', 'story3b'),
   labN.before.exclusion = 55,
@@ -456,6 +585,25 @@ data.frame(
 ```
 
 #### Replication results
+
+```{r rep3, echo=F, fig.width=5, fig.height=3}
+cfs %>% filter(story=='story3a' | story=='story3b') %>%
+  group_by(condition, variable, story) %>%
+  summarise(data_response = mean(probability),
+            labN.before.exclusion=0,
+            labN=0,
+            turkN.before.exclusion=length(unique(rep_counterfactuals$workerid)),
+            turkN=length(unique(rep_counterfactuals_good_ss$workerid)),
+            data_sd = sd(probability),
+            model_response = NA,
+            model_sd = NA) %>%
+  select(story, labN.before.exclusion, labN, turkN.before.exclusion,turkN,
+         condition, variable, data_response, data_sd, model_response,model_sd) %>%
+  as.data.frame %>%
+  mutate(model_response = c(0, 0, 0.5499999999999999, 0.5499999999999999, 0.5499999999999999)) %>% graph(.)
+```
+
+#### "Replication" with explanations
 
 * For {{Ronald}} the mouse, B is not present because <select>
   <option value="nothing">none of these</option>
@@ -486,8 +634,6 @@ data.frame(
   <option value="B">B is present</option>
   <option value="C">C is not present</option>
 </select>.
-
-#### "Replication" with explanations
 
 ### Story 4: equally strong causes
 
@@ -551,6 +697,26 @@ data.frame(
 
 #### Replication results
 
+```{r rep4, echo=F, fig.width=5, fig.height=3}
+cfs %>% filter(story=='story4') %>%
+  group_by(condition, variable) %>%
+  summarise(data_response = mean(probability),
+            story = story[1],
+            labN.before.exclusion=0,
+            labN=0,
+            turkN.before.exclusion=length(unique(rep_counterfactuals$workerid)),
+            turkN=length(unique(rep_counterfactuals_good_ss$workerid)),
+            data_sd = sd(probability),
+            model_response = NA,
+            model_sd = NA) %>%
+  select(story, labN.before.exclusion, labN, turkN.before.exclusion,turkN,
+         condition, variable, data_response, data_sd, model_response,model_sd) %>%
+  as.data.frame %>%
+  mutate(model_response = c(0.6451612903225805, 0.6451612903225805, 1, 1)) %>% graph(.)
+```
+
+#### "Replication" with explanations
+
 * For {{Harold}} the mouse, A is not present because <select>
   <option value="nothing">none of these</option>
   <option value="A">A is not present</option>
@@ -579,8 +745,6 @@ data.frame(
   <option value="C">C is not present</option>
   <option value="D">D is not present</option>
 </select>.
-
-#### "Replication" with explanations
 
 ### Story 5: different strength causes
 
@@ -644,6 +808,26 @@ data.frame(
 
 #### Replication results
 
+```{r rep5, echo=F, fig.width=5, fig.height=3}
+cfs %>% filter(story=='story5') %>%
+  group_by(condition, variable) %>%
+  summarise(data_response = mean(probability),
+            story = story[1],
+            labN.before.exclusion=0,
+            labN=0,
+            turkN.before.exclusion=length(unique(rep_counterfactuals$workerid)),
+            turkN=length(unique(rep_counterfactuals_good_ss$workerid)),
+            data_sd = sd(probability),
+            model_response = NA,
+            model_sd = NA) %>%
+  select(story, labN.before.exclusion, labN, turkN.before.exclusion,turkN,
+         condition, variable, data_response, data_sd, model_response,model_sd) %>%
+  as.data.frame %>%
+  mutate(model_response = c(0, 0.2592592592592591, 0, 0)) %>% graph(.)
+```
+
+#### "Replication" with explanations
+
 * For {{Ilana}} the mouse, A is present because <select>
   <option value="nothing">none of these</option>
   <option value="A">A is present</option>
@@ -672,8 +856,6 @@ data.frame(
   <option value="C">C is present</option>
   <option value="D">D is present</option>
 </select>.
-
-#### "Replication" with explanations
 
 ### Story 6: 
 
@@ -732,6 +914,26 @@ data.frame(
 
 #### Replication results
 
+```{r rep6, echo=F, fig.width=5, fig.height=3}
+cfs %>% filter(story=='story6') %>%
+  group_by(condition, variable) %>%
+  summarise(data_response = mean(probability),
+            story = story[1],
+            labN.before.exclusion=0,
+            labN=0,
+            turkN.before.exclusion=length(unique(rep_counterfactuals$workerid)),
+            turkN=length(unique(rep_counterfactuals_good_ss$workerid)),
+            data_sd = sd(probability),
+            model_response = NA,
+            model_sd = NA) %>%
+  select(story, labN.before.exclusion, labN, turkN.before.exclusion,turkN,
+         condition, variable, data_response, data_sd, model_response,model_sd) %>%
+  as.data.frame %>%
+  mutate(model_response = c(0.7307692307692304, 1, 0.4500000000000002)) %>% graph(.)
+```
+
+#### "Replication" with explanations
+
 * For {{Albert}} the mouse, A is not present because <select>
   <option value="nothing">none of these</option>
   <option value="A">A is not present</option>
@@ -751,10 +953,19 @@ data.frame(
   <option value="C">C is present</option>
 </select>.
 
-#### "Replication" with explanations
+## Demographic information (counterfactual)
+
+```{r, echo=F}
+visualize_questionnaire(rep_counterfactuals);
+```
+
 
 ## ToDo
 
-2. code up experiment and run
-3. get model predictions
-4. compare ppl to model & replication to L&K
+3. get model predictions & graph them
+3. compare replication to L&K, i.e.
+    * compare the statistics they reported to ours
+    * check that their model predictions match ours
+4. email noah results
+    * should I run more Ss (They ran 56 on Turk, I ran 20 for $35.70)
+5. explanations?
