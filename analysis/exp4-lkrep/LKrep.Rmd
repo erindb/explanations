@@ -277,7 +277,7 @@ probs = rep_counterfactuals_good_ss %>% filter(trial_type == 'probability') %>%
 
 ## Model
 
-L&K used a simple grid search to find parameter values that minimized sum squared error. They considered considered 1000 uniformly spaced parameter values between 0 and 1. Best-fit parameter was s=0.68.
+L&K used a simple grid search to find parameter values that minimized sum squared error. They considered considered 1000 uniformly spaced parameter values between 0 and 1. Best-fit parameter was s=0.53.
 
 ## Basic method
 
@@ -392,7 +392,7 @@ rep1 = cfs %>% filter(story=='story1') %>%
             model_sd = 0) %>%
   select(story, labN.before.exclusion, labN, turkN.before.exclusion,turkN,
          condition, variable, data_response, data_sd, model_response,model_sd) %>%
-  as.data.frame %>% mutate(model_response=c(0, 0.5499999999999999))
+  as.data.frame %>% mutate(model_response=c(0,0.577))
 graph(rep1)
 ```
 
@@ -483,7 +483,7 @@ rep2 = cfs %>% filter(story=='story2') %>%
   select(story, labN.before.exclusion, labN, turkN.before.exclusion,turkN,
          condition, variable, data_response, data_sd, model_response,model_sd) %>%
   as.data.frame %>%
-  mutate(model_response = c(0.13253012048192778, 0, 0))
+  mutate(model_response = c(0.13813741920038305, 0, 0))
 graph(rep2)
 ```
 
@@ -605,7 +605,7 @@ rep3 = cfs %>% filter(story=='story3a' | story=='story3b') %>%
   select(story, labN.before.exclusion, labN, turkN.before.exclusion,turkN,
          condition, variable, data_response, data_sd, model_response,model_sd) %>%
   as.data.frame %>%
-  mutate(model_response = c(0, 0, 0.5499999999999999, 0.5499999999999999, 0.5499999999999999)) 
+  mutate(model_response = c(0, 0, 0.5770000000000001, 0.5770000000000001, 0.5770000000000001)) 
 graph(rep3)
 ```
 
@@ -719,7 +719,7 @@ rep4 = cfs %>% filter(story=='story4') %>%
   select(story, labN.before.exclusion, labN, turkN.before.exclusion,turkN,
          condition, variable, data_response, data_sd, model_response,model_sd) %>%
   as.data.frame %>%
-  mutate(model_response = c(0.6451612903225805, 0.6451612903225805, 1, 1))
+  mutate(model_response = c(0.6341154090044389, 0.6341154090044389, 1, 1))
 graph(rep4)
 ```
 
@@ -832,7 +832,7 @@ rep5 = cfs %>% filter(story=='story5') %>%
   select(story, labN.before.exclusion, labN, turkN.before.exclusion,turkN,
          condition, variable, data_response, data_sd, model_response,model_sd) %>%
   as.data.frame %>%
-  mutate(model_response = c(0, 0.2592592592592591, 0, 0))
+  mutate(model_response = c(0, 0.2609016999260903, 0, 0))
 graph(rep5)
 ```
 
@@ -867,7 +867,7 @@ graph(rep5)
   <option value="D">D is present</option>
 </select>.
 
-### Story 6: 
+### Story 6: xor chain
 
 #### Causal structure
 
@@ -940,7 +940,7 @@ rep6 = cfs %>% filter(story=='story6') %>%
   select(story, labN.before.exclusion, labN, turkN.before.exclusion,turkN,
          condition, variable, data_response, data_sd, model_response,model_sd) %>%
   as.data.frame %>%
-  mutate(model_response = c(0.7307692307692304, 1, 0.4500000000000002))
+  mutate(model_response = c(0.7297090352220519, 1, 0.4229999999999996))
 graph(rep6)
 ```
 
@@ -967,7 +967,7 @@ graph(rep6)
 
 ## Overall replication results (counterfactual)
 
-```{r}
+```{r, echo=F, fig.width=5, fig.height=3}
 repN = length(unique(rep_counterfactuals_good_ss$workerid))
 lk = rbind(lk1, lk2, lk3, lk4, lk5, lk6) %>% mutate(version = 'original')
 rep = rbind(rep1, rep2, rep3, rep4, rep5, rep6) %>% mutate(version = 'replication')

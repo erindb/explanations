@@ -37,7 +37,8 @@ var strPrint = function(erp) {
   print("print(Enumerate(function() {return s[discrete(p)];}))")
 };
 
-var model = function(rand, vars, condition, consequents, initialRVs, alpha) {
+var model = function(rand, vars, condition, consequents, initialRVs, stickiness) {
+  var alpha = 1;
 
   // ======== other utilities =========
 
@@ -55,7 +56,7 @@ var model = function(rand, vars, condition, consequents, initialRVs, alpha) {
   // ======== parameters and counterfactual functions =========
 
   // parameter for how similar counterfactual world is to actual world
-  var stickiness = 0.5;
+  // var stickiness = 0.5;
 
   var stickyRand = function(actualRVs) {
     var freshRVs = rand();
@@ -383,7 +384,7 @@ var story5 = {
   vars: function(rVs) {
     var A = rVs.uA;
     var B = rVs.uB;
-    var C = (A | (B & rVs.uBC)) ? true : false;
+    var C = A ? true : (B & rVs.uBC) ? true : false;
     var D = C;
     return {
       A: A,
@@ -413,19 +414,20 @@ var story6 = {
   }
 }
 
-// print("bacon, alpha=0.5")
-// model(bacon.rand, bacon.vars, '!S', ['B'], {uB: true, uS: true, uN: true}, 0.5);
-// print("story1, alpha=0.68")
-// model(story1.rand, story1.vars, '!A', ['B'], {uA: true, uB: true}, 0.68);
-// print("story2, alpha=0.68")
-// model(story2.rand, story2.vars, '!B', ['A', 'B', 'C'], {uA: true, uAB: true, uBC: true}, 0.68);
-// print("story3, alpha=0.68")
-// model(story3.rand, story3.vars, '!A', ['A', 'B', 'C'], {uA: true, uB: true}, 0.68);
-// print("story4, alpha=0.68")
-// model(story4.rand, story4.vars, 'C', ['A', 'B', 'C', 'D'], {uA: false, uB: false}, 0.68);
-print("story5, alpha=0.68")
-model(story5.rand, story5.vars, '!C', ['A', 'B', 'C', 'D'], {uA: true, uB: true, uBC: true}, 0.68);
-// print("story6, alpha=0.68")
-// model(story6.rand, story6.vars, 'B', ['A', 'B', 'C'], {uA: false, uAB: false, uBC: true}, 0.68);
+var s = 0.53;
+print("bacon, stickiness=0.5")
+model(bacon.rand, bacon.vars, '!S', ['B'], {uB: true, uS: true, uN: true}, 0.5);
+print("story1, stickiness=" + s)
+model(story1.rand, story1.vars, '!A', ['B'], {uA: true, uB: true}, s);
+print("story2, stickiness=" + s)
+model(story2.rand, story2.vars, '!B', ['A', 'B', 'C'], {uA: true, uAB: true, uBC: true}, s);
+print("story3, stickiness=" + s)
+model(story3.rand, story3.vars, '!A', ['A', 'B', 'C'], {uA: true, uB: true}, s);
+print("story4, stickiness=" + s)
+model(story4.rand, story4.vars, 'C', ['A', 'B', 'C', 'D'], {uA: false, uB: false}, s);
+print("story5, stickiness=" + s);
+model(story5.rand, story5.vars, '!C', ['A', 'B', 'C', 'D'], {uA: true, uB: true, uBC: true}, s);
+print("story6, stickiness=" + s)
+model(story6.rand, story6.vars, 'B', ['A', 'B', 'C'], {uA: false, uAB: false, uBC: true}, s);
 
 "finished"
