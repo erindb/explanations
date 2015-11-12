@@ -483,7 +483,7 @@ rep2 = cfs %>% filter(story=='story2') %>%
   select(story, labN.before.exclusion, labN, turkN.before.exclusion,turkN,
          condition, variable, data_response, data_sd, model_response,model_sd) %>%
   as.data.frame %>%
-  mutate(model_response = c(0.13813741920038305, 0, 0))
+  mutate(model_response = c(0.1381374192003831, 0, 0))
 graph(rep2)
 ```
 
@@ -719,7 +719,7 @@ rep4 = cfs %>% filter(story=='story4') %>%
   select(story, labN.before.exclusion, labN, turkN.before.exclusion,turkN,
          condition, variable, data_response, data_sd, model_response,model_sd) %>%
   as.data.frame %>%
-  mutate(model_response = c(0.6341154090044389, 0.6341154090044389, 1, 1))
+  mutate(model_response = c(0.6341154090044385, 0.6341154090044385, 1, 1))
 graph(rep4)
 ```
 
@@ -832,7 +832,7 @@ rep5 = cfs %>% filter(story=='story5') %>%
   select(story, labN.before.exclusion, labN, turkN.before.exclusion,turkN,
          condition, variable, data_response, data_sd, model_response,model_sd) %>%
   as.data.frame %>%
-  mutate(model_response = c(0, 0.2609016999260903, 0, 0))
+  mutate(model_response = c(0, 0.31606260201313624, 0, 0))
 graph(rep5)
 ```
 
@@ -940,7 +940,7 @@ rep6 = cfs %>% filter(story=='story6') %>%
   select(story, labN.before.exclusion, labN, turkN.before.exclusion,turkN,
          condition, variable, data_response, data_sd, model_response,model_sd) %>%
   as.data.frame %>%
-  mutate(model_response = c(0.7297090352220519, 1, 0.4229999999999996))
+  mutate(model_response = c(0.7297090352220518, 1, 0.42299999999999943))
 graph(rep6)
 ```
 
@@ -1000,6 +1000,171 @@ rbind(lk, rep) %>% gather('source', 'number', 8:11) %>%
 visualize_questionnaire(rep_counterfactuals);
 ```
 
+## Explanations vs counterfactuals
+
+```{r, echo=F}
+parse_variable = function(explanation, story) {
+  if (is.na(story)) {
+    return(NA)
+  } else {
+    words = strsplit(explanation, ' ')[[1]]
+    variable = words[1]
+    if (story == 'story3a' & variable == 'B') {
+      variable = 'C'
+    }
+    return(variable)
+ }
+}
+parse_polarity = function(explanation, story) {
+  if (is.na(explanation)) {
+    return(NA)
+  } else {
+    words = strsplit(explanation, ' ')[[1]]
+    variable = words[1]
+    polarityPresent = words[3] == 'present'
+    return(polarityPresent)
+  }
+}
+parse_cond = function(explanation, story) {
+  if (is.na(explanation)) {
+    return(NA)
+  } else {
+    words = strsplit(explanation, ' ')[[1]]
+    variable = words[5]
+    negate = words[7] == 'absent'
+    if (negate) {
+      return(paste(variable, '=T', sep=''))  #CF is if !cond...
+    } else {
+      return(paste(variable, '=F', sep=''))
+    }
+    }
+}
+rep_expls = do.call(rbind, lapply(1:3, function(i) {
+  return (read.csv(paste('../../data/exp5-lkrep-explanations/round', i, '/exp5.csv', sep='')) %>%
+            mutate(workerid = (workerid + (i-1)*9)))})) %>%
+  mutate(time_to_complete = Answer.time_in_minutes,
+         reward=as.numeric(sapply(as.character(reward), format_reward)),
+         trial_type=factor(ifelse(is.na(trial_type), 'explanation', 'probability')),
+         workerid=factor(workerid),
+         story_index = factor(story_index),
+         confused_by_attention_checks = comments == 3 | comments == 8,
+         variable = as.character(mapply(function(expl, stry) {
+           return(parse_variable(expl, stry))
+         }, as.character(explanation), story)),
+         condition = as.character(mapply(function(expl, stry) {
+           return(parse_cond(expl, stry))
+         }, as.character(explanation), story)),
+         polarityPresent = mapply(function(expl, stry) {
+           return(parse_polarity(expl, stry))
+         }, as.character(explanation), story),
+         consequent = variable) %>%
+  select(
+    workerid, story_index, story, trial_type, consequent,
+    lab_name, mouse_name, phrase, response, condition, language,
+    enjoyment, gender, age, comments, assess, education, time_to_complete,
+    reward, confused_by_attention_checks, variable, explanation,
+    polarityPresent)
+
+expls = rep_expls %>% filter(trial_type == 'explanation') %>%
+  mutate(data.expls = response,
+         explanation) %>%
+  select(workerid, story, variable, condition, data.expls, polarityPresent, explanation)
+expls_aggr = expls %>% group_by(story, variable, condition) %>%
+  summarize(data.expls = mean(data.expls),
+            polarityPresent = polarityPresent[1],
+            explanation = explanation[1]) %>% as.data.frame
+```
+
+```{r, echo=F}
+df = rep %>% mutate(data.cfs = data_response, model.cfs = model_response) %>%
+  select(story, variable, data.cfs, model.cfs)
+df = df[order(df$story),] %>% cbind(., expls_aggr)
+
+d = data.frame(
+  story = paste(df$story, df$condition),
+  variable = df$variable,
+  data.expls = expls_aggr$data.expls,
+  data.cfs = df$data.cfs,
+  condition = df$condition,
+  polarityPresent = df$polarityPresent) %>%
+  mutate(data.expls.from.cfs = ifelse(polarityPresent, 1-data.cfs, data.cfs))
+
+ggplot(df, aes(x=model.cfs, y=data.cfs, colour=story, shape=variable)) +
+  geom_point(size=3) +
+  geom_abline(intercept = 0, slope = 1, linetype='dotted') +
+  ylim(0, 1) +
+  ggtitle('Model vs Data: Counterfactuals') +
+  theme_few() + scale_colour_few()
+
+data.frame(
+  story = paste(df$story, df$condition),
+  variable = df$variable,
+  data.expls = df$data.expls,
+  data.cfs = df$data.cfs,
+  condition = df$condition) %>% gather('source', 'response', c(3,4)) %>%
+  ggplot(., aes(x=variable, y=response, colour=source, group=source)) +
+  geom_point(size=3) +
+  geom_line() +
+  ylim(0, 1) +
+  facet_wrap(~ story) +
+  theme_few() + scale_colour_few()
+
+## correct direction of CFs
+d %>% select(-data.cfs) %>% gather('source', 'response', c(3,6)) %>%
+  ggplot(., aes(x=variable, y=response, colour=source, group=source)) +
+  geom_point(size=3) +
+  geom_line() +
+  ylim(0, 1) +
+  facet_wrap(~ story) +
+  theme_few() + scale_colour_few()
+
+## correct direction of CFs
+d %>% select(-data.cfs) %>% gather('source', 'response', c(3,6)) %>%
+  ggplot(., aes(x=variable, y=response, colour=source, group=source)) +
+  geom_point(size=3) +
+  geom_line() +
+  ylim(0, 1) +
+  facet_wrap(~ story) +
+  theme_few() + scale_colour_few()
+
+## correct direction of CFs
+ggplot(d, aes(x=data.expls.from.cfs, y=data.expls, colour=story, shape=variable)) +
+  geom_point(size=3) +
+  ylim(0, 1) +
+  geom_abline(intercept = 0, slope = 1, linetype='dotted') +
+  theme_few() + scale_colour_few()
+
+
+
+ggplot(df, aes(x=data.cfs, y=data.expls.correctPolarity, colour=story, shape=variable)) +
+  geom_point(size=3) +
+  ylim(0, 1) +
+  geom_abline(intercept = 1, slope = -1, linetype='dotted') +
+  ggtitle('CFs vs Explanations: Data') +
+  theme_few() + scale_colour_few()
+
+ggplot(df, aes(x=variable, y=data.expls.correctPolarity, colour=story)) +
+  geom_point(size=3) +
+  geom_line() +
+  ylim(0, 1) +
+  geom_abline(intercept = 1, slope = -1, linetype='dotted') +
+  ggtitle('CFs vs Explanations: Data') +
+  theme_few() + scale_colour_few()
+
+ggplot(df, aes(x=model.cfs, y=data.cfs, colour=story, shape=variable)) +
+  geom_point(size=3) +
+  ylim(0, 1) +
+  geom_abline(intercept = 0, slope = 1, linetype='dotted') +
+  ggtitle('Model vs Data: Explanations') +
+  theme_few() + scale_colour_few()
+
+ggplot(df, aes(x=model.cfs, y=data.cfs, colour=story, shape=variable)) +
+  geom_point(size=3) +
+  ylim(0, 1) +
+  geom_abline(intercept = 0, slope = 1, linetype='dotted') +
+  ggtitle('CFs vs Explanations: Model') +
+  theme_few() + scale_colour_few()
+```
 
 ## ToDo
 

@@ -1,0 +1,743 @@
+---
+title: "Explanations"
+output:
+  html_document:
+    highlight: pygments
+    theme: flatly
+    toc: yes
+---
+
+*Load libraries.*
+
+```{r load libraries, echo=F}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(grid)
+library(ggthemes)
+library(bootstrap)
+
+### my utils (TODO: make script with this stuff)
+weight = 2
+
+bootCI = function(r) { return(boott(r, mean, nboott=1000)$confpoints[1,c('0.025', '0.975')]) }
+bootCIstr = function(r) { return(paste(bootCI(r), collapse=' ')) }
+bootlow = function(r) {return(as.numeric(sapply(r, function(s) {return(strsplit(s, ' ')[[1]][1])})))}
+boothigh = function(r) {return(as.numeric(sapply(r, function(s) {return(strsplit(s, ' ')[[1]][2])})))}
+
+# Multiple plot function
+#
+# ggplot objects can be passed in ..., or to plotlist (as a list of ggplot objects)
+# - cols:   Number of columns in layout
+# - layout: A matrix specifying the layout. If present, 'cols' is ignored.
+#
+# If the layout is something like matrix(c(1,2,3,3), nrow=2, byrow=TRUE),
+# then plot 1 will go in the upper left, 2 will go in the upper right, and
+# 3 will go all the way across the bottom.
+#
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+  library(grid)
+
+  # Make a list from the ... arguments and plotlist
+  plots <- c(list(...), plotlist)
+
+  numPlots = length(plots)
+
+  # If layout is NULL, then use 'cols' to determine layout
+  if (is.null(layout)) {
+    # Make the panel
+    # ncol: Number of columns of plots
+    # nrow: Number of rows needed, calculated from # of cols
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                    ncol = cols, nrow = ceiling(numPlots/cols))
+  }
+
+ if (numPlots==1) {
+    print(plots[[1]])
+
+  } else {
+    # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) {
+      # Get the i,j matrix positions of the regions that contain this subplot
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                      layout.pos.col = matchidx$col))
+    }
+  }
+}
+
+visualize_questionnaire = function(df) {
+  print('comments:')
+  print(levels(df$comments))
+  print(paste('number of participants: ', length(unique(df$workerid))))
+  ageplot = ggplot(df, aes(x=age)) + geom_histogram(binwidth=5) +
+    theme_few() + xlim(0,100)
+  langplot = ggplot(df, aes(x=language, fill=language)) + geom_bar() +
+    theme_few() + scale_fill_brewer(type='qual', palette=6)
+  enjoyplot = ggplot(df, aes(x=enjoyment)) + geom_histogram(binwidth=0.5) +
+    theme_few() + xlim(-1,3)
+  eduplot = ggplot(df, aes(x=education)) + geom_histogram(binwidth=0.5) +
+    theme_few() + xlim(-1,5)
+  genderplot = ggplot(df, aes(x=gender, fill=gender)) + geom_bar() +
+    theme_few() + scale_fill_brewer(type='qual', palette=6)
+  assessplot = ggplot(df, aes(x=assess, fill=assess)) + geom_bar() +
+    theme_few() + scale_fill_brewer(type='qual', palette=6)
+  timeplot = ggplot(df, aes(x=time_to_complete)) + geom_histogram(binwidth=1) + theme_few()
+  df$hourly_rate = df$reward/df$time_to_complete*60
+  rateplot = ggplot(df, aes(x=hourly_rate)) + geom_histogram(binwidth=1) + theme_few()
+  multiplot(ageplot, langplot, eduplot, genderplot, enjoyplot, assessplot,
+            timeplot, rateplot, cols=2)
+}
+```
+
+```{r load data, echo=F}
+rounds_of_tugowar = 7 #total should be ~60 Ss
+rounds_of_coffee = 8 #total should be ~70 Ss
+rounds_of_conference = 8 #14 #total should be ~120 Ss
+format_explanationTag = function(tag) {
+  lst = strsplit(tag, '\'')[[1]]
+  if (length(lst) == 1) {
+    return(tag) }
+  else {
+    lst2 = strsplit(lst[2], '')[[1]]
+    return(paste(lst2[1:length(lst2)-1], collapse='')) } }
+format_reward = function(reward) {
+  reward = reward[[1]]
+  reward = strsplit(reward, '')[[1]]
+  reward = paste(reward[2:length(reward)], collapse='')
+  return(reward)
+}
+conference = do.call(rbind, lapply(1:8, function(i) {
+  return (read.csv(paste('../../data/exp1-conference/round', i, '/exp1.csv', sep='')) %>%
+            mutate(workerid = (workerid + (i-1)*9)))})) %>%
+  mutate(time_to_complete = Answer.time_in_minutes,
+         reward=as.numeric(sapply(as.character(reward), format_reward))) %>%
+  select(
+    workerid, trial_type, howShirtColors, explanation, bobShirtColor,
+    model, response, speaker2Explanation, language, enjoyment,
+    gender, age, comments, assess, education, time_to_complete, reward)
+tugowar = do.call(rbind, lapply(1:rounds_of_tugowar, function(i) {
+  return (read.csv(paste('../../data/exp2-tugowar/round', i, '/exp2.csv', sep='')) %>%
+            mutate(workerid = workerid+ (i-1)*9))})) %>%
+  mutate(time_to_complete = Answer.time_in_minutes,
+         reward=as.numeric(sapply(as.character(reward), format_reward))) %>%
+  select(
+    workerid, playerA, explanationTag, trialType, response,
+    enjoyment, language, gender, age, comments, assess, education,
+    time_to_complete, reward) %>%
+  mutate(explanationTag = factor(as.character(sapply(as.character(explanationTag), format_explanationTag))))
+coffee = do.call(rbind, lapply(1:rounds_of_coffee, function(i) {
+  return (read.csv(paste('../../data/exp3-coffee/round', i, '/exp3.csv', sep='')) %>%
+            mutate(workerid = workerid+ (i-1)*9))})) %>%
+  mutate(time_to_complete = Answer.time_in_minutes,
+         reward=as.numeric(sapply(as.character(reward), format_reward))) %>%
+  select(
+    workerid, story, explanation, response, language, enjoyment,
+    gender, age, comments, assess, education, time_to_complete, reward)
+```
+
+## Conference Explanations
+
+### Demographics & Reviews
+
+```{r coffee visualize demographics and enjoyment, echo=F, fig.width=8.5, fig.height=11}
+visualize_questionnaire(conference)
+```
+
+```{r conference reformat data, echo=F}
+conferencedata = conference %>% 
+  filter(assess!="No") %>%
+  select(trial_type, howShirtColors, explanation, bobShirtColor,
+         model, response, speaker2Explanation, workerid)
+infermodel = conferencedata %>%
+  filter(trial_type == 'listenerInferModel') %>%
+  mutate(explanation = factor(explanation,
+                              levels=c("Because.",
+                                       "Because Bob has a blue shirt.",
+                                       "Because she has a red shirt.",
+                                       "Because Bob has a red shirt."),
+                              labels=c('nothing',
+                                       'B because !A',
+                                       'B because B',
+                                       'B because A')),
+         model=factor(model,
+                      levels=c('Alice and Bob chose their shirt colors completely independently.',
+                               'First, Bob chose his shirt color. Then, based on Bob&quotechars choice, Alice chose her shirt color.',
+                               'First, Alice chose her shirt color. Then, based on Alice&quotechars choice, Bob chose his shirt color.',
+                               'Something happened that influenced Alice&quotechars choice and Bob&quotechars choice in the same way, but they didn&quotechart directly pay attention to each other&quotechars choices.'),
+                      labels=c('independent', 'cause', 'reverseCause', 'commonCause'))) %>%
+  select(explanation, model, response, workerid) %>%
+  mutate(src='data')
+speaker2 = conferencedata %>%
+  filter(trial_type == 'speaker2') %>%
+  mutate(model=factor(howShirtColors,
+                      levels=c('First Bob chooses his shirt color. Then, based on Bob&quotechars choice, Alice chooses her shirt color. Alice tries to choose the same shirt color as Bob (but with some low probability she might end up with a different color shirt from Bob).',
+                               'First Alice chooses her shirt color. Then, based on Alice&quotechars choice, Bob chooses his shirt color. Bob tries to choose the same shirt color as Alice (but with some low probability he might end up with a different color shirt from Alice).',
+                               'First their mutual friend Carol chooses her shirt color. Then, based on Carol&quotechars choice, Alice and Bob choose their shirt colors. They try to choose the same shirt color as Carol (but with some low probability each of them might end up with a different color shirt from Carol). Alice and Bob don&quotechart see each other&quotechars shirt choice.',
+                               'Alice and Bob choose their shirt colors independently.'),
+                      labels=c('cause', 'reverseCause', 'commonCause', 'independent')),
+         explanation=factor(speaker2Explanation,
+                            levels=c("Bob has a blue shirt",
+                                     "Bob has a red shirt",
+                                     "she has a red shirt"),
+                            labels=c("B because !A",
+                                     "B because A",
+                                     "B because B")),
+         A=as.logical(factor(bobShirtColor, levels=c('blue', 'red'), labels=c(F, T)))) %>%
+  select(model, A, response, explanation, workerid) %>%
+  mutate(src='data')
+
+```
+
+```{r load model, echo=F}
+simulation_infermodel = data.frame(
+  explanation=c("B because A", "B because A", "B because A", "B because A",
+                "B because B", "B because B", "B because B", "B because B",
+                "B because !A", "B because !A", "B because !A", "B because !A",
+                "nothing", "nothing", "nothing", "nothing",
+                "B because A", "B because A", "B because A", "B because A",
+                "B because B", "B because B", "B because B", "B because B",
+                "B because !A", "B because !A", "B because !A", "B because !A",
+                "nothing", "nothing", "nothing", "nothing"),
+  src=c('simulation:pragmatic', 'simulation:pragmatic', 'simulation:pragmatic', 'simulation:pragmatic',
+        'simulation:pragmatic', 'simulation:pragmatic', 'simulation:pragmatic', 'simulation:pragmatic',
+        'simulation:pragmatic', 'simulation:pragmatic', 'simulation:pragmatic', 'simulation:pragmatic',
+        'simulation:pragmatic', 'simulation:pragmatic', 'simulation:pragmatic', 'simulation:pragmatic',
+        'simulation:literal', 'simulation:literal', 'simulation:literal', 'simulation:literal',
+        'simulation:literal', 'simulation:literal', 'simulation:literal', 'simulation:literal',
+        'simulation:literal', 'simulation:literal', 'simulation:literal', 'simulation:literal',
+        'simulation:literal', 'simulation:literal', 'simulation:literal', 'simulation:literal'),
+  model=c("independent","cause","reverseCause","commonCause",
+          "independent","cause","reverseCause","commonCause",
+          "independent","cause","reverseCause","commonCause",
+          "independent","cause","reverseCause","commonCause",
+          "commonCause","reverseCause","cause","independent",
+          "commonCause","reverseCause","cause","independent",
+          "commonCause","reverseCause","cause","independent",
+          "commonCause","reverseCause","cause","independent"),
+  response=c(0.003344774772850733,0.6044142361498068,0.17556690505836914,0.21667408401897326,
+             0.32209107340104953,0.1859451573281109,0.24760410902031488,0.2443596602505245,
+             0.004448279731971983,0.7434946619204428,0.21909000413523497,0.03296705421235013,
+             0.3220910734010493,0.18594515732811082,0.24760410902031493,0.24435966025052472,
+             0.3237321074642743,0.22542263084524186,0.3681902970472285,0.08265496464325536,
+             0.24999999999999972,0.2499999999999999,0.2500000000000002,0.2500000000000001,
+             0.17101156443594626,0.27632947852135126,0.4513381482515401,0.10132080879116212,
+             0.24999999999999972,0.2499999999999999,0.2500000000000002,0.2500000000000001)) %>%
+  mutate(response.low = response, response.high=response, N=1, bootCI=response)
+```
+
+```{r visualize data infermodel, echo=F}
+infermodel %>%
+  group_by(explanation) %>%
+  summarize(N=length(unique(workerid)))
+
+aggr_infermodel = infermodel %>%
+  group_by(explanation, model) %>%
+  summarize(bootCI = bootCIstr(response),
+            N = length(response),
+            src = src[1],
+            response = mean(response)) %>%
+  mutate(response.low = bootlow(bootCI), response.high = boothigh(bootCI))
+
+# ggplot(aggr_infermodel, aes(x=model, fill=src, y=response, colour=model)) +
+#   geom_bar(stat='identity', size=weight, position='dodge') +
+#   geom_errorbar(aes(x=model, ymin=response.low, ymax=response.high), width=.1) +
+#   facet_wrap(~ explanation) + scale_fill_manual(values=c('white', 'black'))
+
+infermodel_compare = rbind(simulation_infermodel, aggr_infermodel)
+p = ggplot(infermodel_compare, aes(x=model, fill=src, y=response, colour=model)) +
+  geom_bar(stat='identity', size=weight, position=position_dodge(.9)) +
+  geom_errorbar(aes(x=model, ymin=response.low, ymax=response.high), width=.1, position=position_dodge(.9)) +
+  facet_wrap(~ explanation) + scale_fill_manual(values=c('white', 'gray', 'black')) +
+  theme_few(18) + scale_colour_few() +
+  theme(axis.text.x = element_text(angle = -45, vjust = 1, hjust=0))
+ggsave('infermodel_bar.png', p, width=8, height=5)
+
+inferwide = infermodel_compare %>%
+  select(explanation, model, response, src) %>%
+  spread(src, response)
+p = ggplot(inferwide, aes(x=`simulation:literal`, y=data, colour=model, shape=explanation)) +
+  geom_point(size=3) +
+  theme_few(25) + scale_colour_few()
+ggsave('infermodel_scatter_literal.png', p, width=8, height=5)
+p = ggplot(inferwide, aes(x=`simulation:pragmatic`, y=data, colour=model, shape=explanation)) +
+  geom_point(size=3) +
+  theme_few(25) + scale_colour_few()
+ggsave('infermodel_scatter_pragmatic.png', p, width=8, height=5)
+
+with(inferwide, cor.test(`simulation:literal`, data))
+with(inferwide, cor.test(`simulation:pragmatic`, data))
+
+rs_infermodel_literal = lm(data ~ `simulation:literal`, data=inferwide)
+summary(rs_infermodel_literal)
+rs_infermodel_pragmatic = lm(data ~ `simulation:pragmatic`, data=inferwide)
+summary(rs_infermodel_pragmatic)
+```
+
+```{r load model, echo=F}
+simulation_speaker = data.frame(
+  explanation=c('B because !A', 'B because B', 'B because A', 'B because B',
+                'B because !A', 'B because B', 'B because A', 'B because B',
+                'B because !A', 'B because B', 'B because A', 'B because B',
+                'B because !A', 'B because B', 'B because A', 'B because B'),
+  model=c('cause', 'cause', 'cause', 'cause',
+          'reverseCause', 'reverseCause', 'reverseCause', 'reverseCause',
+          'commonCause', 'commonCause', 'commonCause', 'commonCause', 
+          'independent', 'independent', 'independent', 'independent'),
+  A=c(F, F, T, T,
+      F, F, T, T,
+      F, F, T, T,
+      F, F, T, T),
+  response=c(0.29265290347640116, 0.7333237079037284, 0.9642595566962786, 0.7333237079037284,
+             0.0235817487257456, 0.7327027742737794, 0.9445221196834677, 0.7327027742737794,
+             0.1828129293360136, 0.7325407224756643, 0.9252346580780978, 0.7325407224756643,
+             0.000016380065101322237, 0.7286346977928669, 0.00001052036426410862, 0.7286346977928669)) %>%
+  mutate(response.low = response, response.high=response, N=1, bootCI=response, src='simulation')
+```
+
+```{r visualize data speaker2, echo=F}
+speaker2 %>%
+  group_by(model) %>%
+  summarize(N=length(unique(workerid)))
+aggr_speaker = speaker2 %>%
+  group_by(explanation, model, A) %>%
+  summarize(bootCI = bootCIstr(response),
+            N = length(response),
+            src = src[1],
+            response = mean(response)) %>%
+  mutate(response.low = bootlow(bootCI), response.high = boothigh(bootCI))
+aggr_speaker$response.low[aggr_speaker$response.low %in% c(Inf, -Inf, NA)] = aggr_speaker$response[aggr_speaker$response.low %in% c(Inf, -Inf, NA)]
+aggr_speaker$response.high[aggr_speaker$response.high %in% c(Inf, -Inf, NA)] = aggr_speaker$response[aggr_speaker$response.high %in% c(Inf, -Inf, NA)]
+
+speaker_compare = rbind(simulation_speaker, aggr_speaker)
+p = ggplot(speaker_compare, aes(x=explanation, fill=src, y=response, colour=explanation)) +
+  geom_bar(stat='identity', size=weight, position=position_dodge(.9)) +
+#   geom_errorbar(aes(x=explanation, ymin=response.low, ymax=response.high), width=.1, position=position_dodge(.9)) +
+  facet_grid(A ~ model) + scale_fill_manual(values=c('white', 'black')) +
+  theme_few(18) + scale_colour_few() +
+  theme(axis.text.x = element_text(angle = -45, vjust = 1, hjust=0))
+ggsave('speaker_bar.png', p, width=8, height=5)
+
+speakerwide = speaker_compare %>%
+  select(explanation, model, A, response, src) %>%
+  mutate(id = paste(explanation, model, A)) %>%
+  spread(src, response)
+p = ggplot(speakerwide, aes(x=simulation, y=data, colour=model, shape=explanation)) +
+  geom_point(size=3) +
+  theme_few(25) + scale_colour_few()
+ggsave('speaker_scatter.png', p, width=8, height=5)
+
+with(speakerwide, cor.test(simulation, data))
+
+with(speakerwide, cor.test(simulation, data))
+rs_speaker = lm(data ~ simulation, data=speakerwide)
+summary(rs_speaker)
+```
+
+## Tug of War Explanations
+
+### Demographics & Reviews
+
+```{r tugowar visualize demographics and enjoyment, echo=F, fig.width=8.5, fig.height=11}
+visualize_questionnaire(tugowar)
+```
+
+```{r tugowar initial visualization of responses, echo=F}
+tugowardata = tugowar %>%
+  filter(assess!="No") %>%
+  select(playerA, explanationTag, trialType, response, workerid)
+ggplot(tugowardata, aes(x=response)) + geom_histogram(binwidth=0.1) + theme_few()
+ggplot(tugowardata, aes(x=response, fill=trialType)) +
+  geom_histogram(binwidth=0.1) +
+  facet_wrap(~ trialType) +
+  theme_few() + scale_fill_brewer(type='qual', palette=6)
+ggplot(tugowardata, aes(x=response, fill=trialType)) +
+  geom_histogram(binwidth=0.1) +
+  facet_grid(explanationTag ~ trialType) +
+  theme_few() + scale_fill_brewer(type='qual', palette=6)
+tugowardata %>% group_by(explanationTag) %>% summarize(N=length(unique(workerid)))
+```
+
+```{r tugowar barplot, echo=F}
+tugowardata = tugowar %>% select(playerA, explanationTag, trialType, response)
+tugowardata %>%
+  ggplot(., aes(x=explanationTag, y=response, colour=explanationTag)) + 
+  geom_point(alpha=1/3) +
+  facet_wrap(~ trialType) +
+  theme_few() + scale_fill_brewer(type='qual', palette=6) + scale_colour_brewer(type='qual', palette=6)
+aggr_tugowar = tugowardata %>%
+  group_by(explanationTag, trialType) %>%
+  summarise(bootCI = bootCIstr(response),
+            N = length(response),
+            response = mean(response)) %>%
+  mutate(response.low = bootlow(bootCI), response.high = boothigh(bootCI)) %>%
+  mutate(explanation = factor(explanationTag,
+                              levels=c('Because', 'lazy', 'prior', 'strong', 'tried', 'weak', 'won'),
+                              labels=c('because',
+                                       'bob lazy', 'prior', 'alice strong',
+                                       'alice tried', 'bob weak', 'b because b')),
+         variable=trialType,
+         src='data')
+aggr_tugowar = data.frame(aggr_tugowar) %>%
+  select(explanation, variable, response, response.low, response.high, src)
+p = aggr_tugowar %>% filter(explanation %in% c('because', 'bob lazy', 'alice strong', 'alice tried', 'bob weak', 'b because b')) %>%
+  ggplot(., aes(x=explanation, y=response, colour=explanation)) +
+  geom_bar(stat='identity', size=2, position=position_dodge(1), width=0.5, fill='white') +
+  geom_errorbar(aes(x=explanation, ymin=response.low, ymax=response.high), width=.1, position=position_dodge(1)) +
+  facet_wrap(~ variable) +
+  theme_few(18) + scale_colour_few() +
+  theme(axis.text.x = element_text(angle = -45, vjust = 1, hjust=0))
+ggsave('tugowar.png', p, width=16, height=10)
+```
+
+```{r load model, echo=F}
+simulation_tugowar = data.frame(
+  explanation = c(
+    'because', 'b because b', 'alice strong', 'alice tried', 'bob weak', 'bob lazy',
+    'because', 'b because b', 'alice strong', 'alice tried', 'bob weak', 'bob lazy',
+    'because', 'b because b', 'alice strong', 'alice tried', 'bob weak', 'bob lazy',
+    'because', 'b because b', 'alice strong', 'alice tried', 'bob weak', 'bob lazy',
+    'because', 'b because b', 'alice strong', 'alice tried', 'bob weak', 'bob lazy',
+    'because', 'b because b', 'alice strong', 'alice tried', 'bob weak', 'bob lazy',
+    'because', 'b because b', 'alice strong', 'alice tried', 'bob weak', 'bob lazy',
+    'because', 'b because b', 'alice strong', 'alice tried', 'bob weak', 'bob lazy'),
+  variable = c(
+    'aliceStrong', 'aliceStrong', 'aliceStrong', 'aliceStrong', 'aliceStrong', 'aliceStrong',
+    'bobStrong', 'bobStrong', 'bobStrong','bobStrong', 'bobStrong','bobStrong',
+    'aliceTried', 'aliceTried', 'aliceTried', 'aliceTried', 'aliceTried', 'aliceTried',
+    'bobTried', 'bobTried', 'bobTried', 'bobTried', 'bobTried', 'bobTried',
+    'aliceStrong', 'aliceStrong', 'aliceStrong', 'aliceStrong', 'aliceStrong', 'aliceStrong',
+    'bobStrong', 'bobStrong', 'bobStrong','bobStrong', 'bobStrong','bobStrong',
+    'aliceTried', 'aliceTried', 'aliceTried', 'aliceTried', 'aliceTried', 'aliceTried',
+    'bobTried', 'bobTried', 'bobTried', 'bobTried', 'bobTried', 'bobTried'),
+  src = c(
+    'literal', 'literal', 'literal', 'literal', 'literal', 'literal',
+    'literal', 'literal', 'literal', 'literal', 'literal', 'literal',
+    'literal', 'literal', 'literal', 'literal', 'literal', 'literal',
+    'literal', 'literal', 'literal', 'literal', 'literal', 'literal',
+    'pragmatic', 'pragmatic', 'pragmatic', 'pragmatic', 'pragmatic', 'pragmatic',
+    'pragmatic', 'pragmatic', 'pragmatic', 'pragmatic', 'pragmatic', 'pragmatic',
+    'pragmatic', 'pragmatic', 'pragmatic', 'pragmatic', 'pragmatic', 'pragmatic',
+    'pragmatic', 'pragmatic', 'pragmatic', 'pragmatic', 'pragmatic', 'pragmatic'),
+  response = c(
+    0.6944444444444444, 0.6944444444444444, 1, 0.6341333333333331, 0.5941230486685034, 0.5525333333333332,
+    0.3055555555555555, 0.3055555555555555, 0.40587695133149665, 0.36586666666666673, 0, 0.4474666666666667,
+    0.8333333333333334, 0.8333333333333334, 0.7773186409550045, 1, 0.7773186409550048, 0.7440000000000001,
+    0.49999999999999994, 0.49999999999999994, 0.616620752984389, 0.5791999999999999, 0.616620752984389, 0,
+    0.7733603071668854, 0.7733603071668849, 1, 0.6441254104114359, 0.5652375887691969, 0.47702229584304545,
+    0.22663969283311472, 0.2266396928331149, 0.43476241123080267,0.3558745895885642, 0, 0.522977704156954,
+    0.9221821847362157, 0.9221821847362157, 0.8705029930534647, 1, 0.8705029930534649, 0.8235153256707818,
+    0.4815605019843064, 0.4815605019843055, 0.7718065104945474, 0.707891411803622, 0.7718065104945474, 0)) %>%
+  mutate(response.low = response, response.high=response)
+```
+
+```{r tugowar plots, echo=F}
+tugowar_compare = rbind(aggr_tugowar, simulation_tugowar) %>%
+  filter(explanation != 'prior')
+
+p = tugowar_compare %>% filter(src %in% c('data', 'pragmatic')) %>%
+  ggplot(., aes(x=explanation, fill=src, y=response, colour=explanation)) +
+  geom_bar(stat='identity', size=2, position=position_dodge(1), width=0.5) +
+  geom_errorbar(aes(x=explanation, ymin=response.low, ymax=response.high), width=.1, position=position_dodge(1)) +
+  facet_wrap(~ variable) + scale_fill_manual(values=c('white', 'black')) +
+  theme_few(18) + scale_colour_few() +
+  theme(axis.text.x = element_text(angle = -45, vjust = 1, hjust=0))
+ggsave('tugowar_bar.png', p, width=16, height=10)
+print(p)
+
+tugowarwide = tugowar_compare %>%
+  select(explanation, variable, response, src) %>%
+  spread(src, response)
+p = ggplot(tugowarwide, aes(x=literal, y=data, colour=explanation, shape=variable)) +
+  geom_point(size=3) +
+  theme_few(25) + scale_colour_few()
+ggsave('tugowar_scatter_literal.png', p, width=8, height=5)
+p = ggplot(tugowarwide, aes(x=pragmatic, y=data, colour=explanation, shape=variable)) +
+  geom_point(size=3) +
+  theme_few(25) + scale_colour_few()
+ggsave('tugowar_scatter_pragmatic.png', p, width=8, height=5)
+p = ggplot(tugowarwide, aes(x=pragmatic, y=data, colour=explanation, shape=variable)) +
+  geom_point(size=3) +
+  facet_wrap(~ variable) +
+  theme_few(25) + scale_colour_few()
+ggsave('tugowar_scatter_pragmatic_byvariable.png', p, width=8, height=5)
+
+with(tugowarwide, cor.test(literal, data))
+with(tugowarwide, cor.test(pragmatic, data))
+
+rs_tugowar_literal = lm(data ~ literal, data=tugowarwide)
+summary(rs_tugowar_literal)
+rs_tugowar_pragmatic = lm(data ~ pragmatic, data=tugowarwide)
+summary(rs_tugowar_pragmatic)
+rs_tugowar_pragmatic = lm(data ~ pragmatic, data=tugowarwide)
+summary(rs_tugowar_pragmatic)
+```
+
+## Coffee Explanations
+
+### Demographics & Reviews
+
+```{r coffee visualize demographics and enjoyment, echo=F, fig.width=8.5, fig.height=11}
+visualize_questionnaire(coffee)
+```
+
+```{r coffee initial visualization of responses, echo=F}
+coffeedata = coffee %>% 
+  filter(assess!="No") %>%
+  select(story, explanation, response, workerid) %>%
+  mutate(
+    explanationTag = factor(
+      explanation,
+      levels=c(
+        "Because he drank coffee",
+        "Because coffee makes people stay up late",
+        "Because it was Sunday",
+        "Because Bob stays up late on Sunday nights",
+        "To finish his paper",
+        "Because staying up late helped him finish his paper",
+        "Because he had a paper due",
+        "Because he wanted to finish his paper",
+        "Because people tend to want to finish things by the due date",
+        "Because Bob drinks coffee on Sunday nights",
+        "Because every Monday morning, Bob has a paper due."),
+      labels=c('coffee', 'coffee->stay up',
+               'sunday', 'sunday->stay up',
+               'finish paper', 'stay up->finish paper', 'due', 'want finish', 'due->want finish',
+               'sunday->coffee', 'sunday->due')),
+    explCat = explanationTag,
+    explType = explanationTag,
+    nAlts = story,
+    paper = story,
+    coffee = story,
+    sunday = story)
+levels(coffeedata$explCat) = c(
+  'coffee', 'coffee',
+  'sunday', 'sunday',
+  'paper', 'paper', 'paper', 'paper', 'paper',
+  'combo', 'combo')
+levels(coffeedata$explType) = c(
+  'fact', 'link',
+  'fact', 'link',
+  'goal', 'link', 'fact', 'goal', 'link',
+  'link', 'link')
+levels(coffeedata$nAlts) = c(coffeePaper=7, coffeeSundayPaper=11, paper=5, sunday=2, sundayPaper=8, coffee=2, coffeeSunday=5)
+coffeedata$nAlts = as.numeric(as.character(coffeedata$nAlts))
+levels(coffeedata$coffee) = c(coffeePaper=T, coffeeSundayPaper=T, paper=F, sunday=F, sundayPaper=F, coffee=T, coffeeSunday=T)
+coffeedata$coffee = as.logical(coffeedata$coffee)
+levels(coffeedata$paper) = c(coffeePaper=T, coffeeSundayPaper=T, paper=T, sunday=F, sundayPaper=T, coffee=F, coffeeSunday=F)
+coffeedata$paper = as.logical(coffeedata$paper)
+levels(coffeedata$sunday) = c(coffeePaper=F, coffeeSundayPaper=T, paper=F, sunday=T, sundayPaper=T, coffee=F, coffeeSunday=T)
+coffeedata$sunday = as.logical(coffeedata$sunday)
+coffeedata %>% group_by(story) %>% summarize(N=length(unique(workerid)))
+ggplot(coffeedata, aes(x=response)) + geom_histogram(binwidth=0.1) + theme_few()
+ggplot(coffeedata, aes(x=response, fill=explanationTag)) +
+  geom_histogram(binwidth=0.1) +
+  facet_wrap(~ explanationTag) +
+  theme_few()
+```
+
+```{r coffee plot, echo=F}
+# ggplot(coffeedata, aes(x=explanationTag, y=response, colour=explanationTag)) + 
+#   geom_point(alpha=1/5) +
+#   theme_few()
+aggrcoffee_byexpl = coffeedata %>%
+  group_by(explanationTag) %>%
+  summarise(bootCI = bootCIstr(response),
+            N = length(response),
+            explCat = explCat[1],
+            explType = explType[1],
+            response = mean(response)) %>%
+  mutate(response.low = bootlow(bootCI), response.high = boothigh(bootCI))
+# ggplot(aggrcoffee_byexpl, aes(x=explanationTag, y=response, colour=explanationTag)) +
+#   geom_bar(stat='identity', fill='white') +
+#   geom_errorbar(aes(x=explanationTag, ymin=response.low, ymax=response.high, width=0.1)) +
+#   theme_few()
+
+aggrcoffee_bycat = coffeedata %>%
+  group_by(explCat) %>%
+  summarise(bootCI = bootCIstr(response),
+            N = length(response),
+            response = mean(response)) %>%
+  mutate(response.low = bootlow(bootCI), response.high = boothigh(bootCI))
+
+aggrcoffee_bystoryexpl = coffeedata %>%
+  group_by(story, explanationTag) %>%
+  summarise(bootCI = bootCIstr(response),
+            N = length(response),
+            explCat = explCat[1],
+            nAlts = nAlts[1],
+            response = mean(response)) %>%
+  mutate(response.low = bootlow(bootCI), response.high = boothigh(bootCI))
+
+aggrcoffee_bytype = coffeedata %>%
+  group_by(explType) %>%
+  summarise(bootCI = bootCIstr(response),
+            N = length(response),
+            explCat = explCat[1],
+            nAlts = nAlts[1],
+            response = mean(response)) %>%
+  mutate(response.low = bootlow(bootCI), response.high = boothigh(bootCI))
+
+p = ggplot(aggrcoffee_bytype, aes(x=explType, y=response, colour=explType)) +
+  geom_bar(stat='identity', fill=NA, size=weight) +
+  geom_errorbar(aes(x=explType, ymin=response.low, ymax=response.high, width=0)) +
+  theme_few(25) + scale_colour_few()
+ggsave('coffee-expltype.png', p, width=8, height=5)
+print(p)
+
+p = ggplot(aggrcoffee_bycat, aes(x=explCat, y=response, colour=explCat)) +
+  geom_bar(stat='identity', fill=NA, size=weight) +
+  geom_errorbar(aes(x=explCat, ymin=response.low, ymax=response.high, width=0)) +
+  theme_few(25) + scale_colour_few()
+ggsave('coffee-categories.png', p, width=8, height=5)
+print(p)
+
+p = ggplot(aggrcoffee_byexpl, aes(x=explanationTag, y=response, colour=explCat)) +
+  geom_bar(stat='identity', fill=NA, size=weight) +
+  geom_errorbar(aes(x=explanationTag, ymin=response.low, ymax=response.high, width=0)) +
+  theme_few(25) + theme(axis.text.x = element_text(angle = -45, vjust = 1, hjust=0)) +
+  scale_colour_few()
+ggsave('coffee-explanations.png', p, width=8, height=5)
+print(p)
+
+p = aggrcoffee_byexpl %>%
+  mutate(explanationTag = factor(
+    explanationTag,
+    levels=c('coffee', 'sunday', 'due',
+             'coffee->stay up', 'sunday->stay up', 'stay up->finish paper', 'due->want finish',
+             'sunday->coffee', 'sunday->due',
+             'want finish', 'finish paper' ))) %>%
+  ggplot(., aes(x=explanationTag, y=response, colour=explType)) +
+  geom_bar(stat='identity', fill=NA, size=weight) +
+  geom_errorbar(aes(x=explanationTag, ymin=response.low, ymax=response.high, width=0)) +
+  theme_few(25) + theme(axis.text.x = element_text(angle = -45, vjust = 1, hjust=0)) +
+  scale_colour_few()
+ggsave('coffee-explanations-colorbytype.png', p, width=8, height=5)
+print(p)
+
+p = aggrcoffee_byexpl %>%
+  filter(explanationTag %in% c('sunday', 'coffee', 'want finish')) %>%
+  ggplot(., aes(x=explanationTag, y=response, colour=explCat)) +
+  geom_bar(stat='identity', fill=NA, size=weight) +
+  geom_errorbar(aes(x=explanationTag, ymin=response.low, ymax=response.high, width=0)) +
+  theme_few(25) + theme(axis.text.x = element_text(angle = -45, vjust = 1, hjust=0)) +
+  scale_colour_few()
+ggsave('coffee-three-explanations.png', p, width=8, height=5)
+print(p)
+
+p = aggrcoffee_bystoryexpl %>%
+  filter(explanationTag %in% c('sunday', 'coffee', 'want finish')) %>%
+  ggplot(., aes(x=nAlts, y=response, colour=explCat)) +
+  geom_point(size=weight) +
+  geom_errorbar(aes(x=nAlts, ymin=response.low, ymax=response.high, width=0)) +
+  geom_smooth() +
+  facet_wrap(~ explanationTag) +
+  theme_few(25) + theme(axis.text.x = element_text(angle = -45, vjust = 1, hjust=0)) +
+  scale_colour_few()
+ggsave('coffee-three-explanations-by-nalts.png', p, width=8, height=5)
+print(p)
+
+aggrcoffee_bystory = coffeedata %>%
+  group_by(story, explCat) %>%
+  summarise(bootCI = bootCIstr(response),
+            N = length(response),
+            response = mean(response)) %>%
+  mutate(response.low = bootlow(bootCI), response.high = boothigh(bootCI))
+# ggplot(aggrcoffee_bystory, aes(x=story, y=response, colour=story)) +
+#   geom_bar(stat='identity', fill='white') +
+#   geom_errorbar(aes(x=story, ymin=response.low, ymax=response.high, width=0.1)) +
+#   facet_wrap(~ explCat) +
+#   theme_few() + scale_color_brewer(type='qual', palette=6)
+
+ggplot(aggrcoffee_bystoryexpl, aes(x=explanationTag, y=response, colour=explanationTag)) +
+  geom_bar(stat='identity', fill='white') +
+  geom_errorbar(aes(x=explanationTag, ymin=response.low, ymax=response.high, width=0.1)) +
+  facet_wrap(~ story) +
+  theme_few()
+
+aggrcoffee_bycatNum = coffeedata %>%
+  group_by(explCat, nAlts) %>%
+  summarise(bootCI = bootCIstr(response),
+            N = length(response),
+            response = mean(response)) %>%
+  mutate(response.low = bootlow(bootCI), response.high = boothigh(bootCI))
+ggplot(aggrcoffee_bycatNum, aes(x=nAlts, y=response, colour=explCat)) +
+  geom_bar(stat='identity', fill='white') +
+  facet_wrap(~ explCat) +
+  geom_errorbar(aes(x=nAlts, ymin=response.low, ymax=response.high, width=0.1)) +
+  theme_few() + scale_color_brewer(type='qual', palette=6)
+
+
+# ggplot(aggrcoffee_bystoryexpl, aes(x=story, y=response, colour=story)) +
+#   geom_bar(stat='identity', fill='white') +
+#   geom_errorbar(aes(x=story, ymin=response.low, ymax=response.high, width=0.1)) +
+#   facet_wrap(~ explanationTag) +
+#   theme_few() + scale_color_brewer(type='qual', palette=6)
+
+# tugowardata %>%
+#   group_by(explanationTag, trialType) %>%
+#   summarise(bootCI = bootCIstr(response),
+#             N = length(response),
+#             response = mean(response)) %>%
+#   mutate(response.low = bootlow(bootCI), response.high = boothigh(bootCI)) %>%
+#   ggplot(., aes(x=explanationTag, y=response, colour=explanationTag)) + 
+#   geom_bar(stat='identity', fill='white') +
+#   geom_errorbar(aes(x=explanationTag, ymin=response.low, ymax=response.high), width=0.3) +
+#   facet_wrap(~ trialType) +
+#   theme_few() + scale_fill_brewer(type='qual', palette=6) + scale_colour_brewer(type='qual', palette=6)
+
+ggplot(coffeedata, aes(x=nAlts, y=response)) +
+  geom_point(size=3, alpha=1/10) +
+  geom_smooth() +
+  theme_few(25)
+
+rs_expl = lm(response ~ explanationTag, data=coffeedata)
+summary(rs_expl)
+
+rs_cat = lm(response ~ explCat, data=coffeedata)
+summary(rs_cat)
+
+rs_alts = lm(response ~ nAlts, data=coffeedata)
+summary(rs_alts)
+
+rs_story_best = lm(response ~ story, data=subset(coffeedata, explanationTag=='want finish'))
+summary(rs_story_best)
+rs_alts_best = lm(response ~ nAlts, data=subset(coffeedata, explanationTag=='want finish'))
+summary(rs_alts_best)
+
+rs_story_worst = lm(response ~ story, data=subset(coffeedata, explanationTag=='sunday'))
+summary(rs_story_worst)
+rs_alts_worst = lm(response ~ nAlts, data=subset(coffeedata, explanationTag=='sunday'))
+summary(rs_alts_worst)
+
+rs_story_mid = lm(response ~ story, data=subset(coffeedata, explanationTag=='coffee'))
+summary(rs_story_mid)
+rs_alts_mid = lm(response ~ nAlts, data=subset(coffeedata, explanationTag=='coffee'))
+summary(rs_alts_mid)
+
+rs_expltype = lm(response ~ explType, data=coffeedata)
+summary(rs_expltype)
+```
+
+<!-- ## Demographics & Reviews
+
+### Experiment 1: Conference
+
+```{r visualize demographics and enjoyment conference, echo=F, fig.width=8.5, fig.height=11}
+# visualize_questionnaire(conference)
+```
+
+### Experiment 3: Coffee
+
+```{r visualize demographics and enjoyment coffee, echo=F, fig.width=8.5, fig.height=7}
+# visualize_questionnaire(coffee)
+```
+  
+## Analysis
+
+-->

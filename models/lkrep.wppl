@@ -37,7 +37,7 @@ var strPrint = function(erp) {
   print("print(Enumerate(function() {return s[discrete(p)];}))")
 };
 
-var model = function(rand, vars, condition, consequents, initialRVs, stickiness) {
+var model = function(rand, vars, variable, consequents, givenWorld, stickiness) {
   var alpha = 1;
 
   // ======== other utilities =========
@@ -269,8 +269,15 @@ var model = function(rand, vars, condition, consequents, initialRVs, stickiness)
   // ======== examples =========
 
   return map(function(consequent) {
-    var p = get_prob(counterfactualERP(condition, consequent, initialRVs));
-    print('cond=' + condition + ', consequent=' + consequent + ', p=' + p);
+
+    var p = get_prob(Enumerate(function() {
+      var actualRVs = rand();
+      var actualWorld = vars(actualRVs);
+      condition(_.isEqual(actualWorld, givenWorld));
+      var consequentTrue = sample(counterfactualERP(variable, consequent, actualRVs));
+      return consequentTrue
+    }))
+    print('cond=' + variable + ', consequent=' + consequent + ', p=' + p);
     return {
       condition: condition,
       consequent: consequent,
@@ -291,8 +298,8 @@ var bacon = {
   },
   vars: function(rVs) {
     var B = rVs.uB;
-    var S = B & rVs.uS;
-    var N = S | rVs.uN;
+    var S = B & rVs.uS ? true : false;
+    var N = S | rVs.uN ? true : false;
     return {
       B: B,
       S: S,
@@ -326,8 +333,8 @@ var story2 = {
   },
   vars: function(rVs) {
     var A = rVs.uA;
-    var B = A & rVs.uAB;
-    var C = B & rVs.uBC;
+    var B = A & rVs.uAB ? true : false;
+    var C = B & rVs.uBC ? true : false;
     return {
       A: A,
       B: B,
@@ -384,7 +391,7 @@ var story5 = {
   vars: function(rVs) {
     var A = rVs.uA;
     var B = rVs.uB;
-    var C = A ? true : (B & rVs.uBC) ? true : false;
+    var C = A ? true : ((B & rVs.uBC) ? true : false);
     var D = C;
     return {
       A: A,
@@ -416,18 +423,28 @@ var story6 = {
 
 var s = 0.53;
 print("bacon, stickiness=0.5")
-model(bacon.rand, bacon.vars, '!S', ['B'], {uB: true, uS: true, uN: true}, 0.5);
+model(bacon.rand, bacon.vars, '!S', ['B'], {B: true, S: true, N: true}, 0.5);
 print("story1, stickiness=" + s)
-model(story1.rand, story1.vars, '!A', ['B'], {uA: true, uB: true}, s);
+model(story1.rand, story1.vars, '!A', ['B'], {A: true, B: true}, s);
 print("story2, stickiness=" + s)
-model(story2.rand, story2.vars, '!B', ['A', 'B', 'C'], {uA: true, uAB: true, uBC: true}, s);
+model(story2.rand, story2.vars, '!B', ['A', 'B', 'C'], {A: true, B: true, C: true}, s);
 print("story3, stickiness=" + s)
-model(story3.rand, story3.vars, '!A', ['A', 'B', 'C'], {uA: true, uB: true}, s);
+model(story3.rand, story3.vars, '!A', ['A', 'B', 'C'], {A: true, B: true, C: false}, s);
 print("story4, stickiness=" + s)
-model(story4.rand, story4.vars, 'C', ['A', 'B', 'C', 'D'], {uA: false, uB: false}, s);
+model(story4.rand, story4.vars, 'C', ['A', 'B', 'C', 'D'], {A: false, B: false, C: false, D: false}, s);
 print("story5, stickiness=" + s);
-model(story5.rand, story5.vars, '!C', ['A', 'B', 'C', 'D'], {uA: true, uB: true, uBC: true}, s);
+model(story5.rand, story5.vars, '!C', ['A', 'B', 'C', 'D'], {A: true, B: true, C: true, D: true}, s);
 print("story6, stickiness=" + s)
-model(story6.rand, story6.vars, 'B', ['A', 'B', 'C'], {uA: false, uAB: false, uBC: true}, s);
+model(story6.rand, story6.vars, 'B', ['A', 'B', 'C'], {A: false, B: false, C: true}, s);
+
+// var rand = story5.rand;
+// var vars = story5.vars;
+// vizPrint(Enumerate(function() {
+//   var rVs = rand();
+//   var world = vars(rVs);
+//   return world;
+// }));
+
 
 "finished"
+
