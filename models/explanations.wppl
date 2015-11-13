@@ -1,0 +1,404 @@
+// for compatibility with browser
+var print = function(x) {
+  console.log(x);
+};
+var printERP = function(erp) {
+  var support = erp.support();
+  var probs = map(function(x) {return Math.exp(erp.score([], x));}, support);
+  map2(function(s, p) {
+    print(JSON.stringify(s) + ': ' + p);
+  }, support, probs);
+  return true;
+};
+
+// other overall utilities
+
+var checkPossible = function(unfactoredERP) {
+  var factorERP = Enumerate(function() {
+    return sample(unfactoredERP).factor;
+  });
+  if (factorERP.score([], -Infinity) == 0) {
+    // a sort of way of throwing errors if we try to evaluate an impossible utterance
+    return 'impossible';
+  } else {
+    return Enumerate(function() {
+      var result = sample(unfactoredERP);
+      factor(result.factor);
+      return result.result;
+    });
+  }
+};
+
+var checkEnumerate = function(thunk) {
+  return checkPossible(Enumerate(thunk));
+};
+
+var getP = function(erp, value) {
+  var value = value ? value : true;
+  return Math.exp(erp.score([], value));
+};
+
+var model = function(params) {
+
+  // utilities
+
+  var containsBecause = function(utt) {
+    var words = utt.split(' ');
+    return words.length > 1 ? words[1]=='because' : false;
+  };
+
+  var parseBecauseStatement = function(utt) {
+    var words = utt.split(' ');
+    if (words.length != 3) {
+      print('warning 98: expected because statement, got: ' + utt);
+    };
+    return words;
+  };
+
+  var getConsequent = function(utt) {
+    var words = parseBecauseStatement(utt);
+    return words[0]; // **consequent** because antecedent
+  };
+
+  var getAntecedent = function(utt) {
+    var words = parseBecauseStatement(utt);
+    return words[2]; // consequent because **antecedent**
+  };
+
+  var score2Prob = function(s) {
+    return Math.exp(s);
+  };
+
+  var cost2Prob = function(c) {
+    return Math.exp(-c);
+  };
+
+  // default functions
+
+  var defaultStickyRand = function(rand, stickiness) {
+    return function(actualRVs) {
+      var freshRVs = rand();
+      return mapObject(function(key, val) {
+        return flip(stickiness) ? actualRVs[key] : freshRVs[key];
+      }, actualRVs);
+    };
+  };
+
+  var defaultAtlUtt = function(rand, vars) {
+    var basicPropositions = (function() {
+      var rVs = rand();
+      var world = vars(rVs);
+      var booleanPairs = filter(
+        function(keyVal) {return typeof(keyVal[1])=='boolean';},
+        _.pairs(world)
+      );
+      var booleanNames = map(
+        function(keyVal) {return keyVal[0];},
+        booleanPairs
+      );
+      var negatedBools = map(function(b) {return '!' + b;}, booleanNames);
+      return booleanNames.concat(negatedBools);
+    })(); 
+    return function(baseUtterance) {
+      if (baseUtterance) {
+        if (containsBecause(baseUtterance)) {
+          // alternatives of "A because B" are "A because ..."
+          // for each basic proposition,
+          // explain the consequent with that antecedent
+          // or you could say nothing
+          var consequent = getConsequent(baseUtterance);
+          var antecedent = getAntecedent(baseUtterance);
+          return map(
+            function(prop) {return consequent + ' because ' + prop;},
+            (_.contains(basicPropositions, antecedent) ?
+              basicPropositions :
+              basicPropositions.concat([antecedent]))
+          ).concat(['nothing']);
+        } else if (_.contains(basicPropositions, baseUtterance)) {
+          // alternatives of a basic proposition are basic propositions
+          return basicPropositions.concat(['nothing']);
+        } else {
+          // alternatives of anything else are basic propositions
+          // and that utterance
+          return basicPropositions.concat([baseUtterance, 'nothing']);
+        }
+      } else {
+        // by default, return all the base propositions (pos and neg)
+        return basicPropositions.concat(['nothing']);
+      }
+    };
+  };
+
+  var defaultUttCost = function(utt) {
+    if (utt=='nothing') {
+      return 0;
+    } else {
+      var words = utt.split(' ');
+      return words.length;
+    }
+  };
+
+  // read in parameters of model
+  var rand = params.rand;
+  var vars = params.vars;
+  var alpha = params.alpha ? params.alpha : 1;
+  var uttCost = params.uttCost ? params.uttCost : defaultUttCost;
+  var altUtt = params.altUtt ? params.altUtt : defaultAtlUtt(rand, vars);
+  var stickiness = params.stickiness ? params.stickiness : 0.53; // from L&K
+  var stickyRand = (params.stickyRand ?
+    params.stickyRand :
+    defaultStickyRand(rand, stickiness));
+
+  // model!!
+
+  var contextualEval = cache(function(proposition, world) {
+    var context = reduce(
+      function(keyVal, acc) {
+        return acc + ' var ' + keyVal[0] + ' = ' + JSON.stringify(keyVal[1]) + ';';
+      },
+      "",
+      _.pairs(world)
+    );
+    return webpplEval(context + proposition + ';');
+  });
+
+  var cfERP = function(cfParams) {
+    return checkEnumerate(function() {
+      // if no cfAntecedent, condition cfERP on true
+      // if no cfConsequent, return world
+      // if no actualRVs, use actualWorld
+      // if no actualWorld and no actualRVs....sample a completely random world
+
+      if (cfParams.actualRVs & cfParams.actualWorld) {
+        print([
+          'warning 1234:',
+          '*both* RVs and world were given as input!',
+          'actualRVs=',
+          JSON.stringify(cfParams.actualRVs),
+          '; actualWorld=',
+          JSON.stringify(cfParams.actualWorld)
+        ].join(' '));
+      };
+
+      // if we know the actualRVs, use 'em
+      var actualRVs = cfParams.actualRVs ? cfParams.actualRVs : rand();
+      var actualWorld = vars(actualRVs);
+
+      // if we know the actualWorld, condition on that
+      var cond1 = (cfParams.actualWorld ?
+        _.isEqual(cfParams.actualWorld, actualWorld) :
+        true);
+
+      var cfRVs = stickyRand(actualRVs);
+      var cfWorld = vars(cfRVs);
+
+      // if we are given a counterfactual antecedent, condition on that
+      var cond2 = (cfParams.cfAntecedent ?
+        contextualEval(cfParams.cfAntecedent, cfWorld) :
+        true);
+
+      // if cfConsequent specified, return it, else return whole cfWorld
+      var result = (cfParams.cfConsequent ?
+        contextualEval(cfParams.cfConsequent, cfWorld) :
+        cfWorld);
+
+      return {
+        result: result,
+        factor: cond1 & cond2 ? 0 : -Infinity
+      }
+    });
+  };
+
+  var s1PriorERP = Enumerate(function(baseUtterance) {
+    var utterances = altUtt(baseUtterance);
+    var probabilities = map(cost2Prob, map(uttCost, utterances));
+    return categorical(probabilities, utterances);
+  });
+
+  var resultFn = params.resultFn;
+  resultFn({
+    cfERP: cfERP,
+    s1PriorERP: s1PriorERP
+  });
+
+  return 1;
+};
+
+var lkRep = function() {
+
+  var stories = {
+    bacon: {
+    rand : function() {
+      return {
+        uB: flip(0.9),
+        uS: flip(0.9),
+        uN: flip(0.1)
+      };
+    },
+    vars: function(rVs) {
+      var B = rVs.uB;
+      var S = B & rVs.uS ? true : false;
+      var N = S | rVs.uN ? true : false;
+      return {
+        B: B,
+        S: S,
+        N: N
+      };
+    }
+    },
+    story1: {
+      rand : function() {
+        return {
+          uA: flip(0.1),
+          uB: flip(0.1)
+        };
+      },
+      vars: function(rVs) {
+        var A = rVs.uA;
+        var B = rVs.uB;
+        return {
+          A: A,
+          B: B
+        };
+      }
+    },
+    story2: {
+      rand : function() {
+        return {
+          uA: flip(0.1),
+          uAB: flip(0.75),
+          uBC: flip(0.75)
+        };
+      },
+      vars: function(rVs) {
+        var A = rVs.uA;
+        var B = A & rVs.uAB ? true : false;
+        var C = B & rVs.uBC ? true : false;
+        return {
+          A: A,
+          B: B,
+          C: C
+        };
+      }
+    },
+    story3: {
+      rand : function() {
+        return {
+          uA: flip(0.25),
+          uB: flip(0.1)
+        };
+      },
+      vars: function(rVs) {
+        var A = rVs.uA;
+        var B = rVs.uB;
+        var C = (A & !B) | (!A & B) ? true : false;
+        return {
+          A: A,
+          B: B,
+          C: C
+        };
+      }
+    },
+    story4: {
+      rand : function() {
+        return {
+          uA: flip(0.9),
+          uB: flip(0.9)
+        };
+      },
+      vars: function(rVs) {
+        var A = rVs.uA;
+        var B = rVs.uB;
+        var C = (A | B) ? true : false;
+        var D = C;
+        return {
+          A: A,
+          B: B,
+          C: C,
+          D: D
+        };
+      }
+    },
+    story5: {
+      rand : function() {
+        return {
+          uA: flip(0.75),
+          uB: flip(0.75),
+          uBC: flip(0.9)
+        };
+      },
+      vars: function(rVs) {
+        var A = rVs.uA;
+        var B = rVs.uB;
+        var C = A ? true : ((B & rVs.uBC) ? true : false);
+        var D = C;
+        return {
+          A: A,
+          B: B,
+          C: C,
+          D: D
+        };
+      }
+    },
+    story6: {
+      rand : function() {
+        return {
+          uA: flip(0.25),
+          uAB: flip(0.1),
+          uBC: flip(0.1)
+        };
+      },
+      vars: function(rVs) {
+        var A = rVs.uA;
+        var B = (A & !rVs.uAB) | (!A & rVs.uAB) ? true : false;
+        var C = (B & !rVs.uBC) | (!B & rVs.uBC) ? true : false;
+        return {
+          A: A,
+          B: B,
+          C: C
+        };
+      }
+    }
+  };
+
+  var resultFn = function(antecedent, consequents, actualWorld, story, stickiness) {
+    return function(params) {
+      var cfERP = params.cfERP;
+      
+      map(function(consequent) {
+        var p = getP(cfERP(
+          {
+            cfAntecedent: antecedent,
+            cfConsequent: consequent,
+            actualWorld: actualWorld
+          }
+        ));
+        print([story, stickiness, antecedent, consequent, p].join(','));
+        return true;
+      }, consequents);
+    };
+  };
+
+  var printModel = function(story, antecedent, consequents, actualWorld, stickiness) {
+    var stickiness = stickiness ? stickiness : 0.53;
+    model({
+      rand: (stories[story]).rand,
+      vars: (stories[story]).vars,
+      stickiness: stickiness,
+      resultFn: resultFn(antecedent, consequents, actualWorld, story, stickiness)
+    })
+  };
+
+  printModel('bacon', '!S', ['B'], {B: true, S: true, N: true}, 0.5);
+  printModel('story1', '!A', ['A', 'B'], {A: true, B: true});
+  printModel('story2', '!B', ['A', 'B', 'C'], {A: true, B: true, C: true});
+  printModel('story3', '!A', ['A', 'B', 'C'], {A: true, B: true, C: false});
+  printModel('story4', 'C', ['A', 'B', 'C', 'D'], {A: false, B: false, C: false, D: false});
+  printModel('story5', '!C', ['A', 'B', 'C', 'D'], {A: true, B: true, C: true, D: true});
+  printModel('story6', 'B', ['A', 'B', 'C'], {A: false, B: false, C: true});
+
+};
+
+lkRep();
+
+print('finished');
